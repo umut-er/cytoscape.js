@@ -22712,6 +22712,11 @@ BRp.getLabelText = function (ele, prefix) {
     var ellipsis = '\u2026';
     var incLastCh = false;
 
+    if (this.calculateLabelDimensions(ele, text).width < maxW) {
+      // the label already fits
+      return text;
+    }
+
     for (var i = 0; i < text.length; i++) {
       var widthWithNextCh = this.calculateLabelDimensions(ele, ellipsized + text[i] + ellipsis).width;
 
@@ -29291,7 +29296,7 @@ module.exports = Stylesheet;
 "use strict";
 
 
-module.exports = "snapshot-cdd43d002d-1544774551224";
+module.exports = "snapshot-cfdfa4fc6c-1603191618989";
 
 /***/ })
 /******/ ]);
