@@ -187,6 +187,8 @@ by running "gulp dist" command
 
 src/version.js was also modified accourdingly
 
+For more details see: https://github.com/cytoscape/cytoscape.js/pull/2163
+
 
 
 
