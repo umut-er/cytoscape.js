@@ -10945,7 +10945,6 @@ var boundingBoxImpl = function boundingBoxImpl(ele, options) {
         ex2 += activePadding;
         ey2 += activePadding;
       }
-
       if (minY < ey1) {
         ey1 = minY;
       }
@@ -29308,7 +29307,7 @@ module.exports = Stylesheet;
 "use strict";
 
 
-module.exports = "snapshot-4f1cdf0be0-1656315393707";
+module.exports = "snapshot-8eb065dd89-1656602068915";
 
 /***/ })
 /******/ ]);
