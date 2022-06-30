@@ -465,6 +465,12 @@ let boundingBoxImpl = function( ele, options ){
         ey2 += multimerPadding;
       }
 
+      if(sbgn.isActive(ele)) {
+        var shape = ele.css('shape');
+        var activePadding = baseNodeShapes[shape].activePadding;
+        ex2 += activePadding;
+        ey2 += activePadding;
+      }
       if(minY < ey1){
         ey1 = minY;
       }
