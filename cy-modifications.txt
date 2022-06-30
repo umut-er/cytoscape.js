@@ -207,7 +207,7 @@ the following lines were added:
         ey2 += activePadding;
       }
 
-dist/cytoscape.cjs.js,  dist/cytoscape.js,  files were changed accourdingly
+dist/cytoscape.cjs.js,  dist/cytoscape.js, and dist/cytoscape.min.js files were changed accourdingly
 by running "gulp dist" command
 
 src/version.js was also modified accourdingly
