@@ -11700,13 +11700,6 @@ var boundingBoxImpl = function boundingBoxImpl(ele, options) {
         ex2 += multimerPadding;
         ey2 += multimerPadding;
       }
-
-      if (sbgn.isActive(ele)) {
-        var shape = ele.css('shape');
-        var activePadding = baseNodeShapes[shape].activePadding;
-        ex2 += activePadding;
-        ey2 += activePadding;
-      }
       if (minY < ey1) {
         ey1 = minY;
       }
@@ -31286,7 +31279,7 @@ module.exports = Stylesheet;
 "use strict";
 
 
-module.exports = "snapshot-8eb065dd89-1656602068915";
+module.exports = "snapshot-dbd91d3c8f-1656934047355";
 
 /***/ })
 /******/ ]);

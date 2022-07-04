@@ -190,30 +190,6 @@ src/version.js was also modified accourdingly
 For more details see: https://github.com/cytoscape/cytoscape.js/pull/2163
 
 
-%-------------------------------------------------------------%
-%                        CellDesigner active node SUPPORT     %
-%-------------------------------------------------------------%
-
-See: https://github.com/iVis-at-Bilkent/cytoscape.js/commit/b17215eda355c9049813c4c9af9da97e85eb1c19
-
-Changes made:
-In src/collection/dimensions/bounds.js
-the following lines were added:
-
-    if(sbgn.isActive(ele)) {
-        var shape = ele.css('shape');
-        var activePadding = baseNodeShapes[shape].activePadding;
-        ex2 += activePadding;
-        ey2 += activePadding;
-      }
-
-dist/cytoscape.cjs.js,  dist/cytoscape.js, and dist/cytoscape.min.js files were changed accourdingly
-by running "gulp dist" command
-
-src/version.js was also modified accourdingly
-
-For more details see: https://github.com/cytoscape/cytoscape.js/pull/2163
-
 
 
 
