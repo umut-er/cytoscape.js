@@ -470,6 +470,8 @@ let boundingBoxImpl = function( ele, options ){
         var activePadding = baseNodeShapes[shape].activePadding;
         ex2 += activePadding;
         ey2 += activePadding;
+        ex1 -= activePadding;
+        ey1 -= activePadding;
       }
       if(minY < ey1){
         ey1 = minY;
