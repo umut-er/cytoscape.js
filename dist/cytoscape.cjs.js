@@ -10940,8 +10940,7 @@ var boundingBoxImpl = function boundingBoxImpl(ele, options) {
         ey2 += multimerPadding;
       }
 
-      /*
-      if(sbgn.isActive(ele)) {
+      if (sbgn.isActive(ele)) {
         var shape = ele.css('shape');
         var activePadding = baseNodeShapes[shape].activePadding;
         ex2 += activePadding;
@@ -10949,7 +10948,7 @@ var boundingBoxImpl = function boundingBoxImpl(ele, options) {
         ex1 -= activePadding;
         ey1 -= activePadding;
       }
-      */
+
       if (minY < ey1) {
         ey1 = minY;
       }
@@ -29312,7 +29311,7 @@ module.exports = Stylesheet;
 "use strict";
 
 
-module.exports = "snapshot-87a417d549-1658389825964";
+module.exports = "snapshot-543f0ace17-1658923577349";
 
 /***/ })
 /******/ ]);
