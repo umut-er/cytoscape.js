@@ -2766,6 +2766,7 @@ caller.intersectLine = function (node, x, y, render) {
     intersect = shape.intersectLine(node, x, y);
   } else {
     var pos = node.position();
+    //console.log("caller.intersectLine ", shape)
     intersect = shape.intersectLine(pos.x, pos.y, node.outerWidth(), node.outerHeight(), x, y, 0);
   }
 
@@ -11700,6 +11701,16 @@ var boundingBoxImpl = function boundingBoxImpl(ele, options) {
         ex2 += multimerPadding;
         ey2 += multimerPadding;
       }
+
+      if (sbgn.isActive(ele)) {
+        var shape = ele.css('shape');
+        var activePadding = baseNodeShapes[shape].activePadding;
+        ex2 += activePadding;
+        ey2 += activePadding;
+        ex1 -= activePadding;
+        ey1 -= activePadding;
+      }
+
       if (minY < ey1) {
         ey1 = minY;
       }
@@ -31279,7 +31290,7 @@ module.exports = Stylesheet;
 "use strict";
 
 
-module.exports = "snapshot-dbd91d3c8f-1656934047355";
+module.exports = "snapshot-543f0ace17-1658923577349";
 
 /***/ })
 /******/ ]);
