@@ -139,6 +139,9 @@
     ],
     "first": "images"
   },
+  "overrides": {
+    "graceful-fs": "^4.2.11"
+  },
   "dependencies": {
     "heap": "^0.2.6",
     "lodash.debounce": "^4.0.8",
