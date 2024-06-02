@@ -431,7 +431,7 @@ util.setPrefixedProperty = function (obj, propName, prefix, value) {
   obj[propName] = value;
 };
 
-[__webpack_require__(25), __webpack_require__(26), { memoize: __webpack_require__(16) }, __webpack_require__(27), __webpack_require__(28), __webpack_require__(29), __webpack_require__(31)].forEach(function (req) {
+[__webpack_require__(25), __webpack_require__(26), { memoize: __webpack_require__(17) }, __webpack_require__(27), __webpack_require__(28), __webpack_require__(29), __webpack_require__(31)].forEach(function (req) {
   util.extend(util, req);
 });
 
@@ -1518,6 +1518,11 @@ math.getBarrelCurveConstants = function (width, height) {
   };
 };
 
+math.calculateDistance = function (point1, point2) {
+  var distance = Math.pow(point1[0] - point2[0], 2) + Math.pow(point1[1] - point2[1], 2);
+  return Math.sqrt(distance);
+};
+
 module.exports = math;
 
 /***/ }),
@@ -1779,7 +1784,7 @@ module.exports = typeof Promise !== 'undefined' ? Promise : api; // eslint-disab
 
 var is = __webpack_require__(0);
 var util = __webpack_require__(1);
-var newQuery = __webpack_require__(12);
+var newQuery = __webpack_require__(13);
 
 var Selector = function Selector(selector) {
   var self = this;
@@ -1984,8 +1989,1277 @@ module.exports = Selector;
 
 // sbgn shapes not supported by cytoscape.js this object will be exposed in cytoscape.js
 // and will be filled in sbgnviz.js
-// TODO consider filling this object here and remove related things from sbgnviz
+
+// TODO: consider filling this object here and remove related things from sbgnviz
+// I agree it makes more sense like this. This way you can write tests here. - Umut E
+
+// This is a comment from sbgnviz.js. I am leaving it as is. - Umut E
+/*
+* Taken from cytoscape.js and modified so that it can be utilized from sbgnviz
+* in a flexable way. It is needed because the sbgnviz shapes would need to stroke
+* border more than once as they would have infoboxes, multimers etc.
+* Extends the style properties of node with the given ones then strokes the border.
+* Would needed to be slightly updated during cytoscape upgrades if related function in
+* Cytoscape.js is updated. Information about where is the related function is located
+* can be found in the file that list the changes done in ivis cytoscape fork.
+*/
+
+var cyMath = math = __webpack_require__(2);
+var cyBaseNodeShapes = __webpack_require__(12).nodeShapes;
+var cyStyleProperties = __webpack_require__(14);
+
+/*
+ * Render sbgn specific shapes which are not supported by cytoscape.js core
+ */
+
 var sbgn = {};
+
+drawBorder = function drawBorder(_ref) {
+  var context = _ref.context,
+      node = _ref.node,
+      borderWidth = _ref.borderWidth,
+      borderColor = _ref.borderColor,
+      borderStyle = _ref.borderStyle,
+      borderOpacity = _ref.borderOpacity;
+
+
+  borderWidth = borderWidth || node && parseFloat(node.css('border-width'));
+
+  if (borderWidth > 0) {
+    var parentOpacity = node && node.effectiveOpacity() || 1;
+
+    borderStyle = borderStyle || node && node.css('border-style');
+    borderColor = borderColor || node && node.css('border-color');
+    borderOpacity = (borderOpacity || node && node.css('border-opacity')) * parentOpacity;
+
+    var propsToRestore = ['lineWidth', 'lineCap', 'strokeStyle', 'globalAlpha'];
+    var initialProps = {};
+
+    propsToRestore.forEach(function (propName) {
+      initialProps[propName] = context[propName];
+    });
+
+    context.lineWidth = borderWidth;
+    context.lineCap = 'butt';
+    context.strokeStyle = borderColor;
+    context.globalAlpha = borderOpacity;
+
+    if (context.setLineDash) {
+      // for very outofdate browsers
+      switch (borderStyle) {
+        case 'dotted':
+          context.setLineDash([1, 1]);
+          break;
+
+        case 'dashed':
+          context.setLineDash([4, 2]);
+          break;
+
+        case 'solid':
+        case 'double':
+          context.setLineDash([]);
+          break;
+      }
+    }
+
+    context.stroke();
+
+    if (borderStyle === 'double') {
+      context.lineWidth = borderWidth / 3;
+
+      var gco = context.globalCompositeOperation;
+      context.globalCompositeOperation = 'destination-out';
+
+      context.stroke();
+
+      context.globalCompositeOperation = gco;
+    }
+
+    // reset in case we changed the border style
+    if (context.setLineDash) {
+      // for very outofdate browsers
+      context.setLineDash([]);
+    }
+
+    propsToRestore.forEach(function (propName) {
+      context[propName] = initialProps[propName];
+    });
+  }
+};
+
+drawRoundRectanglePath = function drawRoundRectanglePath(context, x, y, width, height, radius) {
+
+  var halfWidth = width / 2;
+  var halfHeight = height / 2;
+  var cornerRadius = radius || cyMath.getRoundRectangleRadius(width, height);
+
+  if (context.beginPath) {
+    context.beginPath();
+  }
+
+  // Start at top middle
+  context.moveTo(x, y - halfHeight);
+  // Arc from middle top to right side
+  context.arcTo(x + halfWidth, y - halfHeight, x + halfWidth, y, cornerRadius);
+  // Arc from right side to bottom
+  context.arcTo(x + halfWidth, y + halfHeight, x, y + halfHeight, cornerRadius);
+  // Arc from bottom to left side
+  context.arcTo(x - halfWidth, y + halfHeight, x - halfWidth, y, cornerRadius);
+  // Arc from left side to topBorder
+  context.arcTo(x - halfWidth, y - halfHeight, x, y - halfHeight, cornerRadius);
+  // Join line
+  context.lineTo(x, y - halfHeight);
+
+  context.closePath();
+};
+
+drawPolygonPath = function drawPolygonPath(context, x, y, width, height, points) {
+
+  var halfW = width / 2;
+  var halfH = height / 2;
+
+  if (context.beginPath) {
+    context.beginPath();
+  }
+
+  context.moveTo(x + halfW * points[0], y + halfH * points[1]);
+
+  for (var i = 1; i < points.length / 2; i++) {
+    context.lineTo(x + halfW * points[i * 2], y + halfH * points[i * 2 + 1]);
+  }
+
+  context.closePath();
+};
+
+sbgnShapes = {
+  'source and sink': true,
+  'nucleic acid feature': true,
+  'complex': true,
+  'macromolecule': true,
+  'simple chemical': true,
+  'biological activity': true,
+  'compartment': true
+};
+
+totallyOverridenNodeShapes = {
+  'macromolecule': true,
+  'nucleic acid feature': true,
+  'simple chemical': true,
+  'complex': true,
+  'biological activity': true,
+  'compartment': true
+};
+
+canHaveInfoBoxShapes = {
+  'simple chemical': true,
+  'macromolecule': true,
+  'nucleic acid feature': true,
+  'complex': true,
+  'biological activity': true,
+  'compartment': true
+};
+
+canBeMultimerShapes = {
+  'macromolecule': true,
+  'complex': true,
+  'nucleic acid feature': true,
+  'simple chemical': true
+};
+
+// var classes = require('../utilities/classes');
+
+sbgn.colors = {
+  clone: "#838383"
+};
+
+sbgn.getDefaultComplexCornerLength = function () {
+  return 24;
+};
+
+// sbgn.drawStateAndInfos = function (node, context, centerX, centerY) {
+//   var layouts = node.data('auxunitlayouts');
+
+//   for (var side in layouts) {
+//     var layout = layouts[side];
+//     classes.AuxUnitLayout.draw(layout, node.cy(), context);
+//   }
+//   context.beginPath();
+//   context.closePath();
+// };
+
+sbgn.drawInfoBox = function (context, x, y, width, height, shapeName) {
+  switch (shapeName) {
+    case 'roundrectangle':
+      cyBaseNodeShapes['roundrectangle'].draw(context, x, y, width, height);
+      break;
+    case 'bottomroundrectangle':
+      sbgn.drawBottomRoundRectangle(context, x, y, width, height);
+      break;
+    case 'ellipse':
+      cyBaseNodeShapes['ellipse'].draw(context, x, y, width, height);
+      break;
+    case 'complex':
+      sbgn.drawComplex(context, x, y, width, height, height / 2);
+      break;
+    case 'perturbing agent':
+      var points = sbgn.generatePerturbingAgentPoints();
+      drawPolygonPath(context, x, y, width, height, points);
+      break;
+    case 'rectangle':
+      cyBaseNodeShapes['rectangle'].draw(context, x, y, width, height);
+      break;
+    case 'stadium':
+      sbgn.drawRoundRectanglePath(context, x, y, width, height, Math.min(width / 2, height / 2, 15));
+      break;
+  }
+};
+
+sbgn.nucleicAcidCheckPoint = function (x, y, padding, width, height, centerX, centerY, points, cornerRadius) {
+
+  //check rectangle at top
+  if (cyMath.pointInsidePolygon(x, y, points, centerX, centerY - cornerRadius / 2, width, height - cornerRadius / 3, [0, -1], padding)) {
+    return true;
+  }
+
+  //check rectangle at bottom
+  if (cyMath.pointInsidePolygon(x, y, points, centerX, centerY + height / 2 - cornerRadius / 2, width - 2 * cornerRadius, cornerRadius, [0, -1], padding)) {
+    return true;
+  }
+
+  //check ellipses
+  var checkInEllipse = function checkInEllipse(x, y, centerX, centerY, width, height, padding) {
+    x -= centerX;
+    y -= centerY;
+
+    x /= width / 2 + padding;
+    y /= height / 2 + padding;
+
+    return Math.pow(x, 2) + Math.pow(y, 2) <= 1;
+  };
+
+  // Check bottom right quarter circle
+  if (checkInEllipse(x, y, centerX + width / 2 - cornerRadius, centerY + height / 2 - cornerRadius, cornerRadius * 2, cornerRadius * 2, padding)) {
+
+    return true;
+  }
+
+  // Check bottom left quarter circle
+  if (checkInEllipse(x, y, centerX - width / 2 + cornerRadius, centerY + height / 2 - cornerRadius, cornerRadius * 2, cornerRadius * 2, padding)) {
+
+    return true;
+  }
+
+  return false;
+};
+
+//we need to force opacity to 1 since we might have state and info boxes.
+//having opaque nodes which have state and info boxes gives unpleasent results.
+sbgn.forceOpacityToOne = function (node, context) {
+  var parentOpacity = node.effectiveOpacity();
+  if (parentOpacity === 0) {
+    return;
+  }
+
+  context.fillStyle = "rgba(" + node._private.style["background-color"].value[0] + "," + node._private.style["background-color"].value[1] + "," + node._private.style["background-color"].value[2] + "," + 1 * node.css('opacity') * parentOpacity + ")";
+};
+
+sbgn.drawSimpleChemicalPath = function (context, x, y, width, height) {
+
+  var halfWidth = width / 2;
+  var halfHeight = height / 2;
+  //var cornerRadius = math.getRoundRectangleRadius(width, height);
+  var cornerRadius = Math.min(halfWidth, halfHeight);
+
+  context.beginPath();
+
+  // Start at top middle
+  context.moveTo(x, y - halfHeight);
+  // Arc from middle top to right side
+  context.arcTo(x + halfWidth, y - halfHeight, x + halfWidth, y, cornerRadius);
+  // Arc from right side to bottom
+  context.arcTo(x + halfWidth, y + halfHeight, x, y + halfHeight, cornerRadius);
+  // Arc from bottom to left side
+  context.arcTo(x - halfWidth, y + halfHeight, x - halfWidth, y, cornerRadius);
+  // Arc from left side to topBorder
+  context.arcTo(x - halfWidth, y - halfHeight, x, y - halfHeight, cornerRadius);
+  // Join line
+  context.lineTo(x, y - halfHeight);
+
+  context.closePath();
+};
+
+sbgn.drawSimpleChemical = function (context, x, y, width, height) {
+  sbgn.drawSimpleChemicalPath(context, x, y, width, height);
+  context.fill();
+};
+
+function simpleChemicalLeftClone(context, centerX, centerY, width, height, cloneMarker, opacity) {
+  if (cloneMarker != null) {
+    var oldGlobalAlpha = context.globalAlpha;
+    context.globalAlpha = opacity;
+    var oldStyle = context.fillStyle;
+    context.fillStyle = sbgn.colors.clone;
+
+    context.beginPath();
+
+    var markerBeginX = centerX - width / 2 * Math.sin(Math.PI / 3);
+    var markerBeginY = centerY + height / 2 * Math.cos(Math.PI / 3);
+    var markerEndX = centerX;
+    var markerEndY = markerBeginY;
+
+    context.moveTo(markerBeginX, markerBeginY);
+    context.lineTo(markerEndX, markerEndY);
+    context.arc(centerX, centerY, width / 2, 3 * Math.PI / 6, 5 * Math.PI / 6);
+
+    context.closePath();
+
+    context.fill();
+    context.fillStyle = oldStyle;
+    context.globalAlpha = oldGlobalAlpha;
+  }
+};
+
+function simpleChemicalRightClone(context, centerX, centerY, width, height, cloneMarker, opacity) {
+  if (cloneMarker != null) {
+    var oldGlobalAlpha = context.globalAlpha;
+    context.globalAlpha = opacity;
+    var oldStyle = context.fillStyle;
+    context.fillStyle = sbgn.colors.clone;
+
+    context.beginPath();
+
+    var markerBeginX = centerX;
+    var markerBeginY = centerY + height / 2 * Math.cos(Math.PI / 3);
+    var markerEndX = centerX + width / 2 * Math.sin(Math.PI / 3);
+    var markerEndY = markerBeginY;
+
+    context.moveTo(markerBeginX, markerBeginY);
+    context.lineTo(markerEndX, markerEndY);
+    context.arc(centerX, centerY, width / 2, Math.PI / 6, 3 * Math.PI / 6);
+
+    context.closePath();
+
+    context.fill();
+    context.fillStyle = oldStyle;
+    context.globalAlpha = oldGlobalAlpha;
+  }
+};
+
+sbgn.drawEllipsePath = function (context, x, y, width, height) {
+  cyBaseNodeShapes['ellipse'].drawPath(context, x, y, width, height);
+};
+
+sbgn.drawBarrel = function (context, x, y, width, height) {
+  cyBaseNodeShapes['barrel'].draw(context, x, y, width, height);
+  context.fill();
+};
+
+sbgn.drawBottomRoundRectangle = function (context, x, y, width, height) {
+  cyBaseNodeShapes['bottomroundrectangle'].draw(context, x, y, width, height);
+  context.fill();
+};
+
+// The old draw implementation for nucleic acid feature
+// now only used for clone marker drawing of nucleic acid feature
+// and macromolecule shapes because 'bottomroundrectangle' function
+// of cytoscape.js did not fit well for this purpose.
+// Did not change the name yet directly as drawNucAcidFeatureClone etc.
+// because it actually draws a nucleic acid feature in a different way.
+sbgn.drawNucAcidFeature2 = function (context, centerX, centerY, width, height, cornerRadius) {
+  cornerRadius = cornerRadius || cyMath.getRoundRectangleRadius(width, height);
+  var halfWidth = width / 2;
+  var halfHeight = height / 2;
+  var left = centerX - halfWidth,
+      right = centerX + halfWidth;
+  var bottom = centerY - halfHeight,
+      top = centerY + halfHeight;
+  context.beginPath();
+
+  context.moveTo(left, bottom);
+  context.lineTo(right, bottom);
+  context.lineTo(right, centerY);
+  context.arcTo(right, top, centerX, top, cornerRadius);
+  context.arcTo(left, top, left, centerY, cornerRadius);
+  context.lineTo(left, bottom);
+
+  context.closePath();
+  context.fill();
+};
+
+/*
+ * Code taken from https://jsperf.com/string-prototype-endswith
+ * Direct implementation seems to work better.
+ * Using this improves isMultimer() performance.
+ * Makes it take 0.1 or 0.2% less time from the whole
+ * loading process, down from ~0.4% initially.
+ */
+function endsWith(str, pattern) {
+  for (var i = pattern.length, l = str.length; i--;) {
+    if (str.charAt(--l) != pattern.charAt(i)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+sbgn.isMultimer = function (node) {
+  var sbgnClass = node._private.data.class;
+  if (sbgnClass && endsWith(sbgnClass, "multimer")) return true;
+  return false;
+};
+
+//this function is created to have same corner length when
+//complex's width or height is changed
+sbgn.generateComplexShapePoints = function (cornerLength, width, height) {
+  //cp stands for corner proportion
+  var cpX = Math.min(cornerLength, 0.5 * width) / width;
+  var cpY = Math.min(cornerLength, 0.5 * height) / height;
+
+  var complexPoints = [-1 + cpX, -1, -1, -1 + cpY, -1, 1 - cpY, -1 + cpX, 1, 1 - cpX, 1, 1, 1 - cpY, 1, -1 + cpY, 1 - cpX, -1];
+
+  return complexPoints;
+};
+
+sbgn.generatePerturbingAgentPoints = function () {
+  return [-1, -1, -0.5, 0, -1, 1, 1, 1, 0.5, 0, 1, -1];
+};
+
+sbgn.getDefaultMultimerPadding = function () {
+  return 5;
+};
+
+// draw background image of nodes
+sbgn.drawImage = function (context, imgObj) {
+  if (imgObj) {
+    context.clip();
+    context.drawImage(imgObj.img, 0, 0, imgObj.imgW, imgObj.imgH, imgObj.x, imgObj.y, imgObj.w, imgObj.h);
+    context.restore();
+  }
+};
+
+cyStyleProperties.types.nodeShape.enums.push('source and sink', 'nucleic acid feature', 'complex', 'macromolecule', 'simple chemical', 'biological activity', 'compartment');
+
+sbgn.registerSbgnNodeShapes = function () {
+
+  function generateDrawFcn(_ref2) {
+    var plainDrawFcn = _ref2.plainDrawFcn,
+        extraDrawFcn = _ref2.extraDrawFcn,
+        canBeMultimer = _ref2.canBeMultimer,
+        cloneMarkerFcn = _ref2.cloneMarkerFcn,
+        canHaveInfoBox = _ref2.canHaveInfoBox,
+        multimerPadding = _ref2.multimerPadding;
+
+
+    return function (context, node, imgObj) {
+
+      var borderWidth = parseFloat(node.css('border-width'));
+      var width = node.outerWidth() - borderWidth;
+      var height = node.outerHeight() - borderWidth;
+      var centerX = node._private.position.x;
+      var centerY = node._private.position.y;
+      var bgOpacity = node.css('background-opacity');
+      var isCloned = cloneMarkerFcn != null && node._private.data.clonemarker;
+
+      if (canBeMultimer && sbgn.isMultimer(node)) {
+        //add multimer shape
+        plainDrawFcn(context, centerX + multimerPadding, centerY + multimerPadding, width, height);
+
+        sbgn.drawBorder({ context: context, node: node });
+
+        if (extraDrawFcn) {
+          extraDrawFcn(context, centerX + multimerPadding, centerY + multimerPadding, width, height);
+
+          sbgn.drawBorder({ context: context, node: node });
+        }
+
+        if (isCloned) {
+          cloneMarkerFcn(context, centerX + multimerPadding, centerY + multimerPadding, width - borderWidth, height - borderWidth, isCloned, true, bgOpacity);
+        }
+      }
+
+      plainDrawFcn(context, centerX, centerY, width, height);
+
+      sbgn.drawBorder({ context: context, node: node });
+      sbgn.drawImage(context, imgObj);
+
+      if (extraDrawFcn) {
+        extraDrawFcn(context, centerX, centerY, width, height);
+
+        sbgn.drawBorder({ context: context, node: node });
+      }
+
+      if (isCloned) {
+        cloneMarkerFcn(context, centerX, centerY, width - borderWidth, height - borderWidth, isCloned, false, bgOpacity);
+      }
+
+      if (canHaveInfoBox) {
+        var oldStyle = context.fillStyle;
+        sbgn.forceOpacityToOne(node, context);
+        sbgn.drawStateAndInfos(node, context, centerX, centerY);
+        context.fillStyle = oldStyle;
+      }
+    };
+  }
+
+  function generateIntersectLineFcn(_ref3) {
+    var plainIntersectLineFcn = _ref3.plainIntersectLineFcn,
+        canBeMultimer = _ref3.canBeMultimer,
+        cloneMarkerFcn = _ref3.cloneMarkerFcn,
+        canHaveInfoBox = _ref3.canHaveInfoBox,
+        multimerPadding = _ref3.multimerPadding;
+
+
+    return function (node, x, y) {
+      var borderWidth = parseFloat(node.css('border-width'));
+      var padding = borderWidth / 2;
+      var width = node.outerWidth() - borderWidth;
+      var height = node.outerHeight() - borderWidth;
+      var centerX = node._private.position.x;
+      var centerY = node._private.position.y;
+
+      var intersections = [];
+
+      if (canHaveInfoBox) {
+        var stateAndInfoIntersectLines = sbgn.intersectLineStateAndInfoBoxes(node, x, y);
+
+        intersections = intersections.concat(stateAndInfoIntersectLines);
+      }
+
+      var nodeIntersectLines = plainIntersectLineFcn(centerX, centerY, width, height, x, y, padding);
+
+      intersections = intersections.concat(nodeIntersectLines);
+
+      if (canBeMultimer && sbgn.isMultimer(node)) {
+        var multimerIntersectionLines = plainIntersectLineFcn(centerX + multimerPadding, centerY + multimerPadding, width, height, x, y, padding);
+
+        intersections = intersections.concat(multimerIntersectionLines);
+      }
+
+      return sbgn.closestIntersectionPoint([x, y], intersections);
+    };
+  }
+
+  function generateCheckPointFcn(_ref4) {
+    var plainCheckPointFcn = _ref4.plainCheckPointFcn,
+        canBeMultimer = _ref4.canBeMultimer,
+        cloneMarkerFcn = _ref4.cloneMarkerFcn,
+        canHaveInfoBox = _ref4.canHaveInfoBox,
+        multimerPadding = _ref4.multimerPadding;
+
+
+    return function (x, y, node, threshold) {
+
+      threshold = threshold || 0;
+      var borderWidth = parseFloat(node.css('border-width'));
+      var width = node.outerWidth() - borderWidth + 2 * threshold;
+      var height = node.outerHeight() - borderWidth + 2 * threshold;
+      var centerX = node._private.position.x;
+      var centerY = node._private.position.y;
+      var padding = borderWidth / 2;
+
+      var nodeCheck = function nodeCheck() {
+        return plainCheckPointFcn(x, y, padding, width, height, centerX, centerY);
+      };
+
+      var stateAndInfoCheck = function stateAndInfoCheck() {
+        return canHaveInfoBox && sbgn.checkPointStateAndInfoBoxes(x, y, node, threshold);
+      };
+
+      var multimerCheck = function multimerCheck() {
+        return canBeMultimer && sbgn.isMultimer(node) && plainCheckPointFcn(x, y, padding, width, height, centerX + multimerPadding, centerY + multimerPadding);
+      };
+
+      return nodeCheck() || stateAndInfoCheck() || multimerCheck();
+    };
+  }
+
+  var shapeNames = ["simple chemical", "macromolecule", "complex", "nucleic acid feature", "source and sink", "biological activity", "compartment", "oldCompartment"];
+
+  shapeNames.forEach(function (shapeName) {
+    var plainDrawFcn = sbgn.plainDraw[shapeName];
+    var plainIntersectLineFcn = sbgn.plainIntersectLine[shapeName];
+    var plainCheckPointFcn = sbgn.plainCheckPoint[shapeName];
+    var canBeMultimer = sbgn.canBeMultimerShapes[shapeName];
+    var cloneMarkerFcn = sbgn.cloneMarker[shapeName];
+    var canHaveInfoBox = sbgn.canHaveInfoBoxShapes[shapeName];
+    var multimerPadding = sbgn.getDefaultMultimerPadding();
+    var extraDrawFcn = sbgn.extraDraw[shapeName];
+
+    var draw = generateDrawFcn({
+      plainDrawFcn: plainDrawFcn, canBeMultimer: canBeMultimer, cloneMarkerFcn: cloneMarkerFcn,
+      canHaveInfoBox: canHaveInfoBox, multimerPadding: multimerPadding, extraDrawFcn: extraDrawFcn
+    });
+
+    var intersectLine = totallyOverridenNodeShapes[shapeName] ? generateIntersectLineFcn({
+      plainIntersectLineFcn: plainIntersectLineFcn, canBeMultimer: canBeMultimer, cloneMarkerFcn: cloneMarkerFcn,
+      canHaveInfoBox: canHaveInfoBox, multimerPadding: multimerPadding
+    }) : plainIntersectLineFcn;
+
+    var checkPoint = totallyOverridenNodeShapes[shapeName] ? generateCheckPointFcn({
+      plainCheckPointFcn: plainCheckPointFcn, canBeMultimer: canBeMultimer, cloneMarkerFcn: cloneMarkerFcn,
+      canHaveInfoBox: canHaveInfoBox, multimerPadding: multimerPadding
+    }) : plainCheckPointFcn;
+
+    var shape = { draw: draw, intersectLine: intersectLine, checkPoint: checkPoint, multimerPadding: multimerPadding };
+
+    cyBaseNodeShapes[shapeName] = shape;
+  });
+};
+
+sbgn.drawEllipse = function (context, x, y, width, height) {
+  //sbgn.drawEllipsePath(context, x, y, width, height);
+  //context.fill();
+  cyBaseNodeShapes['ellipse'].draw(context, x, y, width, height);
+};
+
+sbgn.drawComplex = function (context, x, y, width, height, cornerLength) {
+  cornerLength = cornerLength || sbgn.getDefaultComplexCornerLength();
+  var points = sbgn.generateComplexShapePoints(cornerLength, width, height);
+
+  drawPolygonPath(context, x, y, width, height, points);
+
+  context.fill();
+};
+
+sbgn.drawCrossLine = function (context, x, y, width, height) {
+  var points = cyMath.generateUnitNgonPoints(4, 0);
+
+  context.beginPath();
+  var scaleX = width * Math.sqrt(2) / 2,
+      scaleY = height * Math.sqrt(2) / 2;
+
+  context.moveTo(x + scaleX * points[2], y + scaleY * points[3]);
+  context.lineTo(x + scaleX * points[6], y + scaleY * points[7]);
+  context.closePath();
+};
+
+sbgn.drawBiologicalActivity = function (context, x, y, width, height) {
+  var points = sbgn.generateBiologicalActivityPoints();
+  drawPolygonPath(context, x, y, width, height, points);
+  context.fill();
+};
+
+sbgn.drawRoundRectangle = function (context, x, y, width, height) {
+  drawRoundRectanglePath(context, x, y, width, height);
+  context.fill();
+};
+
+sbgn.generateNucleicAcidPoints = function () {
+  return cyMath.generateUnitNgonPointsFitToSquare(4, 0);
+};
+
+sbgn.generateBiologicalActivityPoints = function () {
+  return cyMath.generateUnitNgonPointsFitToSquare(4, 0);
+};
+
+sbgn.generateCompartmentPoints = function () {
+  return math.generateUnitNgonPointsFitToSquare(4, 0);
+};
+
+sbgn.plainDraw = {
+  "simple chemical": sbgn.drawSimpleChemical,
+  "macromolecule": sbgn.drawRoundRectangle,
+  "complex": sbgn.drawComplex,
+  "nucleic acid feature": sbgn.drawBottomRoundRectangle,
+  "source and sink": sbgn.drawEllipse,
+  "biological activity": sbgn.drawBiologicalActivity,
+  "compartment": sbgn.drawBarrel,
+  "oldCompartment": sbgn.drawRoundRectangle
+};
+
+// To define an extra drawing for the node that is rendered at the very end,
+// even after the node background image is drawn.
+// E.g. cross lines of "source and sink" nodes.
+sbgn.extraDraw = {
+  "source and sink": sbgn.drawCrossLine
+};
+
+sbgn.plainIntersectLine = {
+  "simple chemical": function simpleChemical(centerX, centerY, width, height, x, y, padding) {
+    return cyBaseNodeShapes["ellipse"].intersectLine(centerX, centerY, width, height, x, y, padding);
+  },
+  "macromolecule": function macromolecule(centerX, centerY, width, height, x, y, padding) {
+    return sbgn.roundRectangleIntersectLine(x, y, centerX, centerY, centerX, centerY, width, height, cyMath.getRoundRectangleRadius(width, height), padding);
+  },
+  "complex": function complex(centerX, centerY, width, height, x, y, padding) {
+    var points = sbgn.generateComplexShapePoints(sbgn.getDefaultComplexCornerLength(), width, height);
+    return cyMath.polygonIntersectLine(x, y, points, centerX, centerY, width / 2, height / 2, padding);
+  },
+  "nucleic acid feature": function nucleicAcidFeature(centerX, centerY, width, height, x, y, padding) {
+    return cyBaseNodeShapes["bottomroundrectangle"].intersectLine(centerX, centerY, width, height, x, y, padding);
+  },
+  "source and sink": function sourceAndSink(centerX, centerY, width, height, x, y, padding) {
+    return cyBaseNodeShapes["ellipse"].intersectLine(centerX, centerY, width, height, x, y, padding);
+  },
+  "biological activity": function biologicalActivity(centerX, centerY, width, height, x, y, padding) {
+    var points = sbgn.generateBiologicalActivityPoints();
+    return cyMath.polygonIntersectLine(x, y, points, centerX, centerY, width / 2, height / 2, padding);
+  },
+  "compartment": function compartment(centerX, centerY, width, height, x, y, padding) {
+    return cyBaseNodeShapes["barrel"].intersectLine(centerX, centerY, width, height, x, y, padding);
+  },
+  "oldCompartment": function oldCompartment(centerX, centerY, width, height, x, y, padding) {
+    return cyMath.roundRectangleIntersectLine(x, y, centerX, centerY, width, height, padding);
+  }
+};
+
+sbgn.plainCheckPoint = {
+  "simple chemical": function simpleChemical(x, y, padding, width, height, centerX, centerY) {
+
+    var points = cyMath.generateUnitNgonPointsFitToSquare(4, 0);
+    var halfWidth = width / 2;
+    var halfHeight = height / 2;
+    //var cornerRadius = math.getRoundRectangleRadius(width, height);
+    var cornerRadius = Math.min(halfWidth, halfHeight);
+    //var cornerRadius = math.getRoundRectangleRadius( width, height );
+    var diam = cornerRadius * 2;
+
+    // Check hBox
+    if (cyMath.pointInsidePolygon(x, y, points, centerX, centerY, width, height - diam, [0, -1], padding)) {
+      return true;
+    }
+
+    // Check vBox
+    if (cyMath.pointInsidePolygon(x, y, points, centerX, centerY, width - diam, height, [0, -1], padding)) {
+      return true;
+    }
+
+    // Check top left quarter circle
+    if (cyMath.checkInEllipse(x, y, diam, diam, centerX - width / 2 + cornerRadius, centerY - height / 2 + cornerRadius, padding)) {
+
+      return true;
+    }
+
+    // Check top right quarter circle
+    if (cyMath.checkInEllipse(x, y, diam, diam, centerX + width / 2 - cornerRadius, centerY - height / 2 + cornerRadius, padding)) {
+
+      return true;
+    }
+
+    // Check bottom right quarter circle
+    if (cyMath.checkInEllipse(x, y, diam, diam, centerX + width / 2 - cornerRadius, centerY + height / 2 - cornerRadius, padding)) {
+
+      return true;
+    }
+
+    // Check bottom left quarter circle
+    if (cyMath.checkInEllipse(x, y, diam, diam, centerX - width / 2 + cornerRadius, centerY + height / 2 - cornerRadius, padding)) {
+
+      return true;
+    }
+    return false;
+    //return cyBaseNodeShapes["ellipse"].checkPoint( x, y, padding, width, height, centerX, centerY );
+  },
+  "macromolecule": function macromolecule(x, y, padding, width, height, centerX, centerY) {
+    return cyBaseNodeShapes["roundrectangle"].checkPoint(x, y, padding, width, height, centerX, centerY);
+  },
+  "complex": function complex(x, y, padding, width, height, centerX, centerY) {
+    var points = sbgn.generateComplexShapePoints(sbgn.getDefaultComplexCornerLength(), width, height);
+    return cyMath.pointInsidePolygon(x, y, points, centerX, centerY, width, height, [0, -1], padding);
+  },
+  "nucleic acid feature": function nucleicAcidFeature(x, y, padding, width, height, centerX, centerY) {
+    return cyBaseNodeShapes["bottomroundrectangle"].checkPoint(x, y, padding, width, height, centerX, centerY);
+  },
+  "source and sink": function sourceAndSink(x, y, padding, width, height, centerX, centerY) {
+    return cyBaseNodeShapes["ellipse"].checkPoint(x, y, padding, width, height, centerX, centerY);
+  },
+  "biological activity": function biologicalActivity(x, y, padding, width, height, centerX, centerY) {
+    return cyBaseNodeShapes["rectangle"].checkPoint(x, y, padding, width, height, centerX, centerY);
+  },
+  "compartment": function compartment(x, y, padding, width, height, centerX, centerY) {
+    return cyBaseNodeShapes["barrel"].checkPoint(x, y, padding, width, height, centerX, centerY);
+  },
+  "oldCompartment": function oldCompartment(x, y, padding, width, height, centerX, centerY) {
+    return cyBaseNodeShapes["roundrectangle"].checkPoint(x, y, padding, width, height, centerX, centerY);
+  }
+};
+
+sbgn.cloneMarker = {
+  "simple chemical": function simpleChemical(context, centerX, centerY, width, height, cloneMarker, isMultimer, opacity) {
+    if (cloneMarker != null) {
+      var cornerRadius = Math.min(width / 2, height / 2);
+
+      var firstCircleCenterX = centerX - width / 2 + cornerRadius;
+      var firstCircleCenterY = centerY;
+      var secondCircleCenterX = centerX + width / 2 - cornerRadius;
+      var secondCircleCenterY = centerY;
+      var bottomCircleCenterX = centerX;
+      var bottomCircleCenterY = centerY + height / 2 - cornerRadius;
+
+      if (width < height) {
+        simpleChemicalLeftClone(context, bottomCircleCenterX, bottomCircleCenterY, 2 * cornerRadius, 2 * cornerRadius, cloneMarker, opacity);
+        simpleChemicalRightClone(context, bottomCircleCenterX, bottomCircleCenterY, 2 * cornerRadius, 2 * cornerRadius, cloneMarker, opacity);
+      } else {
+        simpleChemicalLeftClone(context, firstCircleCenterX, firstCircleCenterY, 2 * cornerRadius, 2 * cornerRadius, cloneMarker, opacity);
+        simpleChemicalRightClone(context, secondCircleCenterX, secondCircleCenterY, 2 * cornerRadius, 2 * cornerRadius, cloneMarker, opacity);
+      }
+
+      var oldStyle = context.fillStyle;
+      context.fillStyle = sbgn.colors.clone;
+      var oldGlobalAlpha = context.globalAlpha;
+      context.globalAlpha = opacity;
+
+      var recPoints = cyMath.generateUnitNgonPointsFitToSquare(4, 0);
+      var cloneX = centerX;
+      var cloneY = centerY + 3 / 4 * cornerRadius;
+      var cloneWidth = width - 2 * cornerRadius;
+      var cloneHeight = cornerRadius / 2;
+
+      drawPolygonPath(context, cloneX, cloneY, cloneWidth, cloneHeight, recPoints);
+      context.fill();
+      context.fillStyle = oldStyle;
+      context.globalAlpha = oldGlobalAlpha;
+    }
+  },
+  "nucleic acid feature": function nucleicAcidFeature(context, centerX, centerY, width, height, cloneMarker, isMultimer, opacity) {
+    if (cloneMarker != null) {
+      var cloneWidth = width;
+      var cloneHeight = height / 4;
+      var cloneX = centerX;
+      var cloneY = centerY + 3 * height / 8;
+
+      var oldStyle = context.fillStyle;
+      context.fillStyle = sbgn.colors.clone;
+      var oldGlobalAlpha = context.globalAlpha;
+      context.globalAlpha = opacity;
+
+      var cornerRadius = cyMath.getRoundRectangleRadius(width, height);
+
+      sbgn.drawNucAcidFeature2(context, cloneX, cloneY, cloneWidth, cloneHeight, cornerRadius);
+
+      context.fillStyle = oldStyle;
+      context.globalAlpha = oldGlobalAlpha;
+    }
+  },
+  "macromolecule": function macromolecule(context, centerX, centerY, width, height, cloneMarker, isMultimer, opacity) {
+    sbgn.cloneMarker["nucleic acid feature"](context, centerX, centerY, width, height, cloneMarker, isMultimer, opacity);
+  },
+  "complex": function complex(context, centerX, centerY, width, height, cloneMarker, isMultimer, opacity) {
+    if (cloneMarker != null) {
+      var cornerLength = sbgn.getDefaultComplexCornerLength();
+      var cpX = width >= 50 ? cornerLength / width : cornerLength / 50;
+      var cpY = height >= 50 ? cornerLength / height : cornerLength / 50;
+      var cloneWidth = width;
+      var cloneHeight = height * cpY / 2;
+      var cloneX = centerX;
+      var cloneY = centerY + height / 2 - cloneHeight / 2;
+
+      var markerPoints = [-1, -1, 1, -1, 1 - cpX, 1, -1 + cpX, 1];
+
+      var oldStyle = context.fillStyle;
+      context.fillStyle = sbgn.colors.clone;
+      var oldGlobalAlpha = context.globalAlpha;
+      context.globalAlpha = opacity;
+
+      drawPolygonPath(context, cloneX, cloneY, cloneWidth, cloneHeight, markerPoints);
+      context.fill();
+
+      context.fillStyle = oldStyle;
+      context.globalAlpha = oldGlobalAlpha;
+    }
+  }
+};
+
+sbgn.closestIntersectionPoint = function (point, intersections) {
+  if (intersections.length <= 0) return [];
+
+  var closestIntersection = [];
+  var minDistance = Number.MAX_VALUE;
+
+  for (var i = 0; i < intersections.length; i = i + 2) {
+    var checkPoint = [intersections[i], intersections[i + 1]];
+    var distance = cyMath.calculateDistance(point, checkPoint);
+
+    if (distance < minDistance) {
+      minDistance = distance;
+      closestIntersection = checkPoint;
+    }
+  }
+
+  return closestIntersection;
+};
+
+sbgn.nucleicAcidIntersectionLine = function (x, y, nodeX, nodeY, width, height, cornerRadius, padding) {
+  // var nodeX = node._private.position.x;
+  // var nodeY = node._private.position.y;
+  // var width = node.width();
+  // var height = node.height();
+  // var padding = parseInt(node.css('border-width')) / 2;
+
+  var halfWidth = width / 2;
+  var halfHeight = height / 2;
+
+  var straightLineIntersections;
+
+  // Top segment, left to right
+  {
+    var topStartX = nodeX - halfWidth - padding;
+    var topStartY = nodeY - halfHeight - padding;
+    var topEndX = nodeX + halfWidth + padding;
+    var topEndY = topStartY;
+
+    straightLineIntersections = cyMath.finiteLinesIntersect(x, y, nodeX, nodeY, topStartX, topStartY, topEndX, topEndY, false);
+
+    if (straightLineIntersections.length > 0) {
+      return straightLineIntersections;
+    }
+  }
+
+  // Right segment, top to bottom
+  {
+    var rightStartX = nodeX + halfWidth + padding;
+    var rightStartY = nodeY - halfHeight - padding;
+    var rightEndX = rightStartX;
+    var rightEndY = nodeY + halfHeight - cornerRadius + padding;
+
+    straightLineIntersections = cyMath.finiteLinesIntersect(x, y, nodeX, nodeY, rightStartX, rightStartY, rightEndX, rightEndY, false);
+
+    if (straightLineIntersections.length > 0) {
+      return straightLineIntersections;
+    }
+  }
+
+  // Bottom segment, left to right
+  {
+    var bottomStartX = nodeX - halfWidth + cornerRadius - padding;
+    var bottomStartY = nodeY + halfHeight + padding;
+    var bottomEndX = nodeX + halfWidth - cornerRadius + padding;
+    var bottomEndY = bottomStartY;
+
+    straightLineIntersections = cyMath.finiteLinesIntersect(x, y, nodeX, nodeY, bottomStartX, bottomStartY, bottomEndX, bottomEndY, false);
+
+    if (straightLineIntersections.length > 0) {
+      return straightLineIntersections;
+    }
+  }
+
+  // Left segment, top to bottom
+  {
+    var leftStartX = nodeX - halfWidth - padding;
+    var leftStartY = nodeY - halfHeight - padding;
+    var leftEndX = leftStartX;
+    var leftEndY = nodeY + halfHeight - cornerRadius + padding;
+
+    straightLineIntersections = cyMath.finiteLinesIntersect(x, y, nodeX, nodeY, leftStartX, leftStartY, leftEndX, leftEndY, false);
+
+    if (straightLineIntersections.length > 0) {
+      return straightLineIntersections;
+    }
+  }
+
+  // Check intersections with arc segments, we have only two arcs for
+  //nucleic acid features
+  var arcIntersections;
+
+  // Bottom Right
+  {
+    var bottomRightCenterX = nodeX + halfWidth - cornerRadius;
+    var bottomRightCenterY = nodeY + halfHeight - cornerRadius;
+    arcIntersections = cyMath.intersectLineCircle(x, y, nodeX, nodeY, bottomRightCenterX, bottomRightCenterY, cornerRadius + padding);
+
+    // Ensure the intersection is on the desired quarter of the circle
+    if (arcIntersections.length > 0 && arcIntersections[0] >= bottomRightCenterX && arcIntersections[1] >= bottomRightCenterY) {
+      return [arcIntersections[0], arcIntersections[1]];
+    }
+  }
+
+  // Bottom Left
+  {
+    var bottomLeftCenterX = nodeX - halfWidth + cornerRadius;
+    var bottomLeftCenterY = nodeY + halfHeight - cornerRadius;
+    arcIntersections = cyMath.intersectLineCircle(x, y, nodeX, nodeY, bottomLeftCenterX, bottomLeftCenterY, cornerRadius + padding);
+
+    // Ensure the intersection is on the desired quarter of the circle
+    if (arcIntersections.length > 0 && arcIntersections[0] <= bottomLeftCenterX && arcIntersections[1] >= bottomLeftCenterY) {
+      return [arcIntersections[0], arcIntersections[1]];
+    }
+  }
+  return []; // if nothing
+};
+
+//this function gives the intersections of any line with the upper half of perturbing agent
+sbgn.perturbingAgentIntersectLine = function (x1, y1, x2, y2, nodeX, nodeY, width, height, padding) {
+
+  var halfWidth = width / 2;
+  var halfHeight = height / 2;
+
+  // Check intersections with straight line segments
+  var straightLineIntersections = [];
+
+  // Top segment, left to right
+  {
+    var topStartX = nodeX - halfWidth - padding;
+    var topStartY = nodeY - halfHeight - padding;
+    var topEndX = nodeX + halfWidth + padding;
+    var topEndY = topStartY;
+
+    var intersection = cyMath.finiteLinesIntersect(x1, y1, x2, y2, topStartX, topStartY, topEndX, topEndY, false);
+
+    if (intersection.length > 0) {
+      straightLineIntersections = straightLineIntersections.concat(intersection);
+    }
+  }
+
+  // Right segment, top to bottom
+  {
+    var rightStartX = nodeX + halfWidth + padding;
+    var rightStartY = nodeY - halfHeight - padding;
+    var rightEndX = rightStartX - halfWidth / 2;
+    var rightEndY = nodeY + padding;
+
+    var intersection = cyMath.finiteLinesIntersect(x1, y1, x2, y2, rightStartX, rightStartY, rightEndX, rightEndY, false);
+
+    if (intersection.length > 0) {
+      straightLineIntersections = straightLineIntersections.concat(intersection);
+    }
+  }
+
+  // Left segment, top to bottom
+  {
+    var leftStartX = nodeX - halfWidth - padding;
+    var leftStartY = nodeY - halfHeight - padding;
+    var leftEndX = leftStartX + halfWidth / 2;
+    var leftEndY = nodeY + padding;
+
+    var intersection = cyMath.finiteLinesIntersect(x1, y1, x2, y2, leftStartX, leftStartY, leftEndX, leftEndY, false);
+
+    if (intersection.length > 0) {
+      straightLineIntersections = straightLineIntersections.concat(intersection);
+    }
+  }
+
+  return straightLineIntersections;
+};
+
+//this function gives the intersections of any line with a round rectangle
+sbgn.roundRectangleIntersectLine = function (x1, y1, x2, y2, nodeX, nodeY, width, height, cornerRadius, padding) {
+
+  var halfWidth = width / 2;
+  var halfHeight = height / 2;
+
+  // Check intersections with straight line segments
+  var straightLineIntersections = [];
+  // Top segment, left to right
+  {
+    var topStartX = nodeX - halfWidth + cornerRadius - padding;
+    var topStartY = nodeY - halfHeight - padding;
+    var topEndX = nodeX + halfWidth - cornerRadius + padding;
+    var topEndY = topStartY;
+
+    var intersection = cyMath.finiteLinesIntersect(x1, y1, x2, y2, topStartX, topStartY, topEndX, topEndY, false);
+
+    if (intersection.length > 0) {
+      straightLineIntersections = straightLineIntersections.concat(intersection);
+    }
+  }
+
+  // Right segment, top to bottom
+  {
+    var rightStartX = nodeX + halfWidth + padding;
+    var rightStartY = nodeY - halfHeight + cornerRadius - padding;
+    var rightEndX = rightStartX;
+    var rightEndY = nodeY + halfHeight - cornerRadius + padding;
+
+    var intersection = cyMath.finiteLinesIntersect(x1, y1, x2, y2, rightStartX, rightStartY, rightEndX, rightEndY, false);
+
+    if (intersection.length > 0) {
+      straightLineIntersections = straightLineIntersections.concat(intersection);
+    }
+  }
+
+  // Bottom segment, left to right
+  {
+    var bottomStartX = nodeX - halfWidth + cornerRadius - padding;
+    var bottomStartY = nodeY + halfHeight + padding;
+    var bottomEndX = nodeX + halfWidth - cornerRadius + padding;
+    var bottomEndY = bottomStartY;
+
+    var intersection = cyMath.finiteLinesIntersect(x1, y1, x2, y2, bottomStartX, bottomStartY, bottomEndX, bottomEndY, false);
+
+    if (intersection.length > 0) {
+      straightLineIntersections = straightLineIntersections.concat(intersection);
+    }
+  }
+
+  // Left segment, top to bottom
+  {
+    var leftStartX = nodeX - halfWidth - padding;
+    var leftStartY = nodeY - halfHeight + cornerRadius - padding;
+    var leftEndX = leftStartX;
+    var leftEndY = nodeY + halfHeight - cornerRadius + padding;
+
+    var intersection = cyMath.finiteLinesIntersect(x1, y1, x2, y2, leftStartX, leftStartY, leftEndX, leftEndY, false);
+
+    if (intersection.length > 0) {
+      straightLineIntersections = straightLineIntersections.concat(intersection);
+    }
+  }
+
+  // Check intersections with arc segments
+  var arcIntersections;
+
+  // Top Left
+  {
+    var topLeftCenterX = nodeX - halfWidth + cornerRadius;
+    var topLeftCenterY = nodeY - halfHeight + cornerRadius;
+    arcIntersections = cyMath.intersectLineCircle(x1, y1, x2, y2, topLeftCenterX, topLeftCenterY, cornerRadius + padding);
+
+    // Ensure the intersection is on the desired quarter of the circle
+    if (arcIntersections.length > 0 && arcIntersections[0] <= topLeftCenterX && arcIntersections[1] <= topLeftCenterY) {
+      straightLineIntersections = straightLineIntersections.concat(arcIntersections);
+    }
+  }
+
+  // Top Right
+  {
+    var topRightCenterX = nodeX + halfWidth - cornerRadius;
+    var topRightCenterY = nodeY - halfHeight + cornerRadius;
+    arcIntersections = cyMath.intersectLineCircle(x1, y1, x2, y2, topRightCenterX, topRightCenterY, cornerRadius + padding);
+
+    // Ensure the intersection is on the desired quarter of the circle
+    if (arcIntersections.length > 0 && arcIntersections[0] >= topRightCenterX && arcIntersections[1] <= topRightCenterY) {
+      straightLineIntersections = straightLineIntersections.concat(arcIntersections);
+    }
+  }
+
+  // Bottom Right
+  {
+    var bottomRightCenterX = nodeX + halfWidth - cornerRadius;
+    var bottomRightCenterY = nodeY + halfHeight - cornerRadius;
+    arcIntersections = cyMath.intersectLineCircle(x1, y1, x2, y2, bottomRightCenterX, bottomRightCenterY, cornerRadius + padding);
+
+    // Ensure the intersection is on the desired quarter of the circle
+    if (arcIntersections.length > 0 && arcIntersections[0] >= bottomRightCenterX && arcIntersections[1] >= bottomRightCenterY) {
+      straightLineIntersections = straightLineIntersections.concat(arcIntersections);
+    }
+  }
+
+  // Bottom Left
+  {
+    var bottomLeftCenterX = nodeX - halfWidth + cornerRadius;
+    var bottomLeftCenterY = nodeY + halfHeight - cornerRadius;
+    arcIntersections = cyMath.intersectLineCircle(x1, y1, x2, y2, bottomLeftCenterX, bottomLeftCenterY, cornerRadius + padding);
+
+    // Ensure the intersection is on the desired quarter of the circle
+    if (arcIntersections.length > 0 && arcIntersections[0] <= bottomLeftCenterX && arcIntersections[1] >= bottomLeftCenterY) {
+      straightLineIntersections = straightLineIntersections.concat(arcIntersections);
+    }
+  }
+
+  if (straightLineIntersections.length > 0) return straightLineIntersections;
+  return []; // if nothing
+};
+
+sbgn.intersectLineEllipse = function (x1, y1, x2, y2, centerX, centerY, width, height, padding) {
+
+  var w = width / 2 + padding;
+  var h = height / 2 + padding;
+  var an = centerX;
+  var bn = centerY;
+
+  var d = [x2 - x1, y2 - y1];
+
+  var m = d[1] / d[0];
+  var n = -1 * m * x2 + y2;
+  var a = h * h + w * w * m * m;
+  var b = -2 * an * h * h + 2 * m * n * w * w - 2 * bn * m * w * w;
+  var c = an * an * h * h + n * n * w * w - 2 * bn * w * w * n + bn * bn * w * w - h * h * w * w;
+
+  var discriminant = b * b - 4 * a * c;
+
+  if (discriminant < 0) {
+    return [];
+  }
+
+  var t1 = (-b + Math.sqrt(discriminant)) / (2 * a);
+  var t2 = (-b - Math.sqrt(discriminant)) / (2 * a);
+
+  var xMin = Math.min(t1, t2);
+  var xMax = Math.max(t1, t2);
+
+  var yMin = m * xMin - m * x2 + y2;
+  var yMax = m * xMax - m * x2 + y2;
+
+  return [xMin, yMin, xMax, yMax];
+};
+
+// sbgn.intersectLineStateAndInfoBoxes = function (node, x, y) {
+//   var centerX = node._private.position.x;
+//   var centerY = node._private.position.y;
+//   var padding = parseInt(node.css('border-width')) / 2;
+
+//   var stateAndInfos = node._private.data.statesandinfos;
+
+//   var intersections = [];
+
+//   for (var i = 0; i < stateAndInfos.length; i++) {
+//     var state = stateAndInfos[i];
+
+//     if (!state.isDisplayed) {
+//       continue;
+//     }
+
+//     var infoBoxWidth = state.bbox.w;
+//     var infoBoxHeight = state.bbox.h;
+
+//     var currIntersections = null;
+
+//     if (state.clazz == "state variable") {
+//       var coord = classes.StateVariable.getAbsoluteCoord(state, node.cy());
+//       currIntersections = sbgn.intersectLineEllipse(x, y, centerX, centerY,
+//         coord.x, coord.y, infoBoxWidth, infoBoxHeight, padding);
+//     }
+//     else if (state.clazz == "unit of information") {
+//       var coord = classes.UnitOfInformation.getAbsoluteCoord(state, node.cy());
+//       if (node.data("class") == "BA macromolecule" || node.data("class") == "BA nucleic acid feature"
+//         || node.data("class") == "BA complex") {
+//         currIntersections = sbgn.roundRectangleIntersectLine(x, y, centerX, centerY,
+//           coord.x, coord.y, infoBoxWidth, infoBoxHeight, 5, padding);
+//       }
+//       else if (node.data("class") == "BA unspecified entity") {
+//         currIntersections = sbgn.intersectLineEllipse(x, y, centerX, centerY,
+//           coord.x, coord.y, infoBoxWidth, infoBoxHeight, padding);
+//       }
+//       else if (node.data("class") == "BA simple chemical") {
+//         currIntersections = cyMath.intersectLineCircle(
+//           x, y,
+//           centerX, centerY,
+//           coord.x,
+//           coord.y,
+//           infoBoxWidth / 4);
+//       }
+//       else if (node.data("class") == "BA perturbing agent") {
+//         currIntersections = sbgn.perturbingAgentIntersectLine(x, y, centerX, centerY,
+//           coord.x, coord.y, infoBoxWidth, infoBoxHeight, padding);
+//       }
+//       else {
+//         currIntersections = sbgn.roundRectangleIntersectLine(x, y, centerX, centerY,
+//           coord.x, coord.y, infoBoxWidth, infoBoxHeight, 0, padding);
+//       }
+//     }
+
+//     intersections = intersections.concat(currIntersections);
+
+//   }
+
+//   return intersections;
+// };
+
+// sbgn.checkPointStateAndInfoBoxes = function (x, y, node, threshold) {
+//   return classes.AuxiliaryUnit.checkPoint(x, y, node, threshold);
+// };
+
+sbgn.isNodeShapeTotallyOverriden = function (render, node) {
+  if (totallyOverridenNodeShapes[render.getNodeShape(node)]) {
+    return true;
+  }
+
+  return false;
+};
+
+sbgn.isActive = function (node) {
+  return false;
+};
 
 module.exports = sbgn;
 
@@ -2001,7 +3275,7 @@ var is = __webpack_require__(0);
 var Map = __webpack_require__(32);
 var Set = __webpack_require__(10);
 
-var Element = __webpack_require__(17);
+var Element = __webpack_require__(18);
 
 // factory for generating edge ids when no id is specified for a new element
 var idFactory = {
@@ -2898,41 +4172,6 @@ module.exports = __webpack_require__(36);
 "use strict";
 
 
-// storage for parsed queries
-var newQuery = function newQuery() {
-  return {
-    classes: [],
-    colonSelectors: [],
-    data: [],
-    group: null,
-    ids: [],
-    meta: [],
-
-    // fake selectors
-    collection: null, // a collection to match against
-    filter: null, // filter function
-
-    // these are defined in the upward direction rather than down (e.g. child)
-    // because we need to go up in Selector.filter()
-    parent: null, // parent query obj
-    ancestor: null, // ancestor query obj
-    subject: null, // defines subject in compound query (subject query obj; points to self if subject)
-
-    // use these only when subject has been defined
-    child: null,
-    descendant: null
-  };
-};
-
-module.exports = newQuery;
-
-/***/ }),
-/* 13 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
 var math = __webpack_require__(2);
 var sbgn = __webpack_require__(7);
 
@@ -3387,1395 +4626,42 @@ BRp.registerNodeShapes = function () {
 module.exports = BRp;
 
 /***/ }),
+/* 13 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+// storage for parsed queries
+var newQuery = function newQuery() {
+  return {
+    classes: [],
+    colonSelectors: [],
+    data: [],
+    group: null,
+    ids: [],
+    meta: [],
+
+    // fake selectors
+    collection: null, // a collection to match against
+    filter: null, // filter function
+
+    // these are defined in the upward direction rather than down (e.g. child)
+    // because we need to go up in Selector.filter()
+    parent: null, // parent query obj
+    ancestor: null, // ancestor query obj
+    subject: null, // defines subject in compound query (subject query obj; points to self if subject)
+
+    // use these only when subject has been defined
+    child: null,
+    descendant: null
+  };
+};
+
+module.exports = newQuery;
+
+/***/ }),
 /* 14 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-var util = __webpack_require__(1);
-var is = __webpack_require__(0);
-var Event = __webpack_require__(19);
-
-var eventRegex = /^([^.]+)(\.(?:[^.]+))?$/; // regex for matching event strings (e.g. "click.namespace")
-var universalNamespace = '.*'; // matches as if no namespace specified and prevents users from unbinding accidentally
-
-var defaults = {
-  qualifierCompare: function qualifierCompare(q1, q2) {
-    return q1 === q2;
-  },
-  eventMatches: function eventMatches() /*context, listener, eventObj*/{
-    return true;
-  },
-  eventFields: function eventFields() /*context*/{
-    return {};
-  },
-  callbackContext: function callbackContext(context /*, listener, eventObj*/) {
-    return context;
-  },
-  beforeEmit: function beforeEmit() /* context, listener, eventObj */{},
-  afterEmit: function afterEmit() /* context, listener, eventObj */{},
-  bubble: function bubble() /*context*/{
-    return false;
-  },
-  parent: function parent() /*context*/{
-    return null;
-  },
-  context: undefined
-};
-
-function Emitter(opts) {
-  util.assign(this, defaults, opts);
-
-  this.listeners = [];
-  this.emitting = 0;
-}
-
-var p = Emitter.prototype;
-
-var forEachEvent = function forEachEvent(self, handler, events, qualifier, callback, conf, confOverrides) {
-  if (is.fn(qualifier)) {
-    callback = qualifier;
-    qualifier = null;
-  }
-
-  if (confOverrides) {
-    if (conf == null) {
-      conf = confOverrides;
-    } else {
-      conf = util.assign({}, conf, confOverrides);
-    }
-  }
-
-  var eventList = events.split(/\s+/);
-
-  for (var i = 0; i < eventList.length; i++) {
-    var evt = eventList[i];
-
-    if (is.emptyString(evt)) {
-      continue;
-    }
-
-    var match = evt.match(eventRegex); // type[.namespace]
-
-    if (match) {
-      var type = match[1];
-      var namespace = match[2] ? match[2] : null;
-      var ret = handler(self, evt, type, namespace, qualifier, callback, conf);
-
-      if (ret === false) {
-        break;
-      } // allow exiting early
-    }
-  }
-};
-
-var makeEventObj = function makeEventObj(self, obj) {
-  return new Event(obj.type, util.assign(obj, self.eventFields(self.context)));
-};
-
-var forEachEventObj = function forEachEventObj(self, handler, events) {
-  if (is.event(events)) {
-    handler(self, events);
-
-    return;
-  } else if (is.plainObject(events)) {
-    handler(self, makeEventObj(self, events));
-
-    return;
-  }
-
-  var eventList = events.split(/\s+/);
-
-  for (var i = 0; i < eventList.length; i++) {
-    var evt = eventList[i];
-
-    if (is.emptyString(evt)) {
-      continue;
-    }
-
-    var match = evt.match(eventRegex); // type[.namespace]
-
-    if (match) {
-      var type = match[1];
-      var namespace = match[2] ? match[2] : null;
-      var eventObj = makeEventObj(self, {
-        type: type,
-        namespace: namespace,
-        target: self.context
-      });
-
-      handler(self, eventObj);
-    }
-  }
-};
-
-p.on = p.addListener = function (events, qualifier, callback, conf, confOverrides) {
-  forEachEvent(this, function (self, event, type, namespace, qualifier, callback, conf) {
-    if (is.fn(callback)) {
-      self.listeners.push({
-        event: event, // full event string
-        callback: callback, // callback to run
-        type: type, // the event type (e.g. 'click')
-        namespace: namespace, // the event namespace (e.g. ".foo")
-        qualifier: qualifier, // a restriction on whether to match this emitter
-        conf: conf // additional configuration
-      });
-    }
-  }, events, qualifier, callback, conf, confOverrides);
-
-  return this;
-};
-
-p.one = function (events, qualifier, callback, conf) {
-  return this.on(events, qualifier, callback, conf, { one: true });
-};
-
-p.removeListener = p.off = function (events, qualifier, callback, conf) {
-  var _this = this;
-
-  if (this.emitting !== 0) {
-    this.listeners = util.copyArray(this.listeners);
-  }
-
-  var listeners = this.listeners;
-
-  var _loop = function _loop(i) {
-    var listener = listeners[i];
-
-    forEachEvent(_this, function (self, event, type, namespace, qualifier, callback /*, conf*/) {
-      if (listener.type === type && (!namespace || listener.namespace === namespace) && (!qualifier || self.qualifierCompare(listener.qualifier, qualifier)) && (!callback || listener.callback === callback)) {
-        listeners.splice(i, 1);
-
-        return false;
-      }
-    }, events, qualifier, callback, conf);
-  };
-
-  for (var i = listeners.length - 1; i >= 0; i--) {
-    _loop(i);
-  }
-
-  return this;
-};
-
-p.emit = p.trigger = function (events, extraParams, manualCallback) {
-  var listeners = this.listeners;
-  var numListenersBeforeEmit = listeners.length;
-
-  this.emitting++;
-
-  if (!is.array(extraParams)) {
-    extraParams = [extraParams];
-  }
-
-  forEachEventObj(this, function (self, eventObj) {
-    if (manualCallback != null) {
-      listeners = [{
-        event: eventObj.event,
-        type: eventObj.type,
-        namespace: eventObj.namespace,
-        callback: manualCallback
-      }];
-
-      numListenersBeforeEmit = listeners.length;
-    }
-
-    var _loop2 = function _loop2(i) {
-      var listener = listeners[i];
-
-      if (listener.type === eventObj.type && (!listener.namespace || listener.namespace === eventObj.namespace || listener.namespace === universalNamespace) && self.eventMatches(self.context, listener, eventObj)) {
-        var args = [eventObj];
-
-        if (extraParams != null) {
-          util.push(args, extraParams);
-        }
-
-        self.beforeEmit(self.context, listener, eventObj);
-
-        if (listener.conf && listener.conf.one) {
-          self.listeners = self.listeners.filter(function (l) {
-            return l !== listener;
-          });
-        }
-
-        var context = self.callbackContext(self.context, listener, eventObj);
-        var ret = listener.callback.apply(context, args);
-
-        self.afterEmit(self.context, listener, eventObj);
-
-        if (ret === false) {
-          eventObj.stopPropagation();
-          eventObj.preventDefault();
-        }
-      } // if listener matches
-    };
-
-    for (var i = 0; i < numListenersBeforeEmit; i++) {
-      _loop2(i);
-    } // for listener
-
-    if (self.bubble(self.context) && !eventObj.isPropagationStopped()) {
-      self.parent(self.context).emit(eventObj, extraParams);
-    }
-  }, events);
-
-  this.emitting--;
-
-  return this;
-};
-
-module.exports = Emitter;
-
-/***/ }),
-/* 15 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-var window = __webpack_require__(3);
-var util = __webpack_require__(1);
-var Collection = __webpack_require__(8);
-var is = __webpack_require__(0);
-var Promise = __webpack_require__(5);
-var define = __webpack_require__(4);
-
-var Core = function Core(opts) {
-  var cy = this;
-
-  opts = util.extend({}, opts);
-
-  var container = opts.container;
-
-  // allow for passing a wrapped jquery object
-  // e.g. cytoscape({ container: $('#cy') })
-  if (container && !is.htmlElement(container) && is.htmlElement(container[0])) {
-    container = container[0];
-  }
-
-  var reg = container ? container._cyreg : null; // e.g. already registered some info (e.g. readies) via jquery
-  reg = reg || {};
-
-  if (reg && reg.cy) {
-    reg.cy.destroy();
-
-    reg = {}; // old instance => replace reg completely
-  }
-
-  var readies = reg.readies = reg.readies || [];
-
-  if (container) {
-    container._cyreg = reg;
-  } // make sure container assoc'd reg points to this cy
-  reg.cy = cy;
-
-  var head = window !== undefined && container !== undefined && !opts.headless;
-  var options = opts;
-  options.layout = util.extend({ name: head ? 'grid' : 'null' }, options.layout);
-  options.renderer = util.extend({ name: head ? 'canvas' : 'null' }, options.renderer);
-
-  var defVal = function defVal(def, val, altVal) {
-    if (val !== undefined) {
-      return val;
-    } else if (altVal !== undefined) {
-      return altVal;
-    } else {
-      return def;
-    }
-  };
-
-  var _p = this._private = {
-    container: container, // html dom ele container
-    ready: false, // whether ready has been triggered
-    options: options, // cached options
-    elements: new Collection(this), // elements in the graph
-    listeners: [], // list of listeners
-    aniEles: new Collection(this), // elements being animated
-    scratch: {}, // scratch object for core
-    layout: null,
-    renderer: null,
-    destroyed: false, // whether destroy was called
-    notificationsEnabled: true, // whether notifications are sent to the renderer
-    minZoom: 1e-50,
-    maxZoom: 1e50,
-    zoomingEnabled: defVal(true, options.zoomingEnabled),
-    userZoomingEnabled: defVal(true, options.userZoomingEnabled),
-    panningEnabled: defVal(true, options.panningEnabled),
-    userPanningEnabled: defVal(true, options.userPanningEnabled),
-    boxSelectionEnabled: defVal(true, options.boxSelectionEnabled),
-    autolock: defVal(false, options.autolock, options.autolockNodes),
-    autoungrabify: defVal(false, options.autoungrabify, options.autoungrabifyNodes),
-    autounselectify: defVal(false, options.autounselectify),
-    styleEnabled: options.styleEnabled === undefined ? head : options.styleEnabled,
-    zoom: is.number(options.zoom) ? options.zoom : 1,
-    pan: {
-      x: is.plainObject(options.pan) && is.number(options.pan.x) ? options.pan.x : 0,
-      y: is.plainObject(options.pan) && is.number(options.pan.y) ? options.pan.y : 0
-    },
-    animation: { // object for currently-running animations
-      current: [],
-      queue: []
-    },
-    hasCompoundNodes: false
-  };
-
-  this.createEmitter();
-
-  // set selection type
-  var selType = options.selectionType;
-  if (selType === undefined || selType !== 'additive' && selType !== 'single') {
-    // then set default
-
-    _p.selectionType = 'single';
-  } else {
-    _p.selectionType = selType;
-  }
-
-  // init zoom bounds
-  if (is.number(options.minZoom) && is.number(options.maxZoom) && options.minZoom < options.maxZoom) {
-    _p.minZoom = options.minZoom;
-    _p.maxZoom = options.maxZoom;
-  } else if (is.number(options.minZoom) && options.maxZoom === undefined) {
-    _p.minZoom = options.minZoom;
-  } else if (is.number(options.maxZoom) && options.minZoom === undefined) {
-    _p.maxZoom = options.maxZoom;
-  }
-
-  var loadExtData = function loadExtData(extData, next) {
-    var anyIsPromise = extData.some(is.promise);
-
-    if (anyIsPromise) {
-      return Promise.all(extData).then(next); // load all data asynchronously, then exec rest of init
-    } else {
-      next(extData); // exec synchronously for convenience
-    }
-  };
-
-  // start with the default stylesheet so we have something before loading an external stylesheet
-  if (_p.styleEnabled) {
-    cy.setStyle([]);
-  }
-
-  // create the renderer
-  cy.initRenderer(util.extend({
-    hideEdgesOnViewport: options.hideEdgesOnViewport,
-    textureOnViewport: options.textureOnViewport,
-    wheelSensitivity: is.number(options.wheelSensitivity) && options.wheelSensitivity > 0 ? options.wheelSensitivity : 1,
-    motionBlur: options.motionBlur === undefined ? false : options.motionBlur, // off by default
-    motionBlurOpacity: options.motionBlurOpacity === undefined ? 0.05 : options.motionBlurOpacity,
-    pixelRatio: is.number(options.pixelRatio) && options.pixelRatio > 0 ? options.pixelRatio : undefined,
-    desktopTapThreshold: options.desktopTapThreshold === undefined ? 4 : options.desktopTapThreshold,
-    touchTapThreshold: options.touchTapThreshold === undefined ? 8 : options.touchTapThreshold
-  }, options.renderer));
-
-  var setElesAndLayout = function setElesAndLayout(elements, onload, ondone) {
-    cy.notifications(false);
-
-    // remove old elements
-    var oldEles = cy.mutableElements();
-    if (oldEles.length > 0) {
-      oldEles.remove();
-    }
-
-    if (elements != null) {
-      if (is.plainObject(elements) || is.array(elements)) {
-        cy.add(elements);
-      }
-    }
-
-    cy.one('layoutready', function (e) {
-      cy.notifications(true);
-      cy.emit(e); // we missed this event by turning notifications off, so pass it on
-
-      cy.notify({
-        type: 'load',
-        eles: cy.mutableElements()
-      });
-
-      cy.one('load', onload);
-      cy.emit('load');
-    }).one('layoutstop', function () {
-      cy.one('done', ondone);
-      cy.emit('done');
-    });
-
-    var layoutOpts = util.extend({}, cy._private.options.layout);
-    layoutOpts.eles = cy.elements();
-
-    cy.layout(layoutOpts).run();
-  };
-
-  loadExtData([options.style, options.elements], function (thens) {
-    var initStyle = thens[0];
-    var initEles = thens[1];
-
-    // init style
-    if (_p.styleEnabled) {
-      cy.style().append(initStyle);
-    }
-
-    // initial load
-    setElesAndLayout(initEles, function () {
-      // onready
-      cy.startAnimationLoop();
-      _p.ready = true;
-
-      // if a ready callback is specified as an option, the bind it
-      if (is.fn(options.ready)) {
-        cy.on('ready', options.ready);
-      }
-
-      // bind all the ready handlers registered before creating this instance
-      for (var i = 0; i < readies.length; i++) {
-        var fn = readies[i];
-        cy.on('ready', fn);
-      }
-      if (reg) {
-        reg.readies = [];
-      } // clear b/c we've bound them all and don't want to keep it around in case a new core uses the same div etc
-
-      cy.emit('ready');
-    }, options.done);
-  });
-};
-
-var corefn = Core.prototype; // short alias
-
-util.extend(corefn, {
-  instanceString: function instanceString() {
-    return 'core';
-  },
-
-  isReady: function isReady() {
-    return this._private.ready;
-  },
-
-  isDestroyed: function isDestroyed() {
-    return this._private.destroyed;
-  },
-
-  ready: function ready(fn) {
-    if (this.isReady()) {
-      this.emitter().emit('ready', [], fn); // just calls fn as though triggered via ready event
-    } else {
-      this.on('ready', fn);
-    }
-
-    return this;
-  },
-
-  destroy: function destroy() {
-    var cy = this;
-    if (cy.isDestroyed()) return;
-
-    cy.stopAnimationLoop();
-
-    cy.destroyRenderer();
-
-    this.emit('destroy');
-
-    cy._private.destroyed = true;
-
-    return cy;
-  },
-
-  hasElementWithId: function hasElementWithId(id) {
-    return this._private.elements.hasElementWithId(id);
-  },
-
-  getElementById: function getElementById(id) {
-    return this._private.elements.getElementById(id);
-  },
-
-  selectionType: function selectionType() {
-    return this._private.selectionType;
-  },
-
-  hasCompoundNodes: function hasCompoundNodes() {
-    return this._private.hasCompoundNodes;
-  },
-
-  headless: function headless() {
-    return this._private.options.renderer.name === 'null';
-  },
-
-  styleEnabled: function styleEnabled() {
-    return this._private.styleEnabled;
-  },
-
-  addToPool: function addToPool(eles) {
-    this._private.elements.merge(eles);
-
-    return this; // chaining
-  },
-
-  removeFromPool: function removeFromPool(eles) {
-    this._private.elements.unmerge(eles);
-
-    return this;
-  },
-
-  container: function container() {
-    return this._private.container;
-  },
-
-  options: function options() {
-    return util.copy(this._private.options);
-  },
-
-  json: function json(obj) {
-    var cy = this;
-    var _p = cy._private;
-    var eles = cy.mutableElements();
-
-    if (is.plainObject(obj)) {
-      // set
-
-      cy.startBatch();
-
-      if (obj.elements) {
-        var idInJson = {};
-
-        var updateEles = function updateEles(jsons, gr) {
-          for (var i = 0; i < jsons.length; i++) {
-            var json = jsons[i];
-            var id = json.data.id;
-            var ele = cy.getElementById(id);
-
-            idInJson[id] = true;
-
-            if (ele.length !== 0) {
-              // existing element should be updated
-              ele.json(json);
-            } else {
-              // otherwise should be added
-              if (gr) {
-                cy.add(util.extend({ group: gr }, json));
-              } else {
-                cy.add(json);
-              }
-            }
-          }
-        };
-
-        if (is.array(obj.elements)) {
-          // elements: []
-          updateEles(obj.elements);
-        } else {
-          // elements: { nodes: [], edges: [] }
-          var grs = ['nodes', 'edges'];
-          for (var i = 0; i < grs.length; i++) {
-            var gr = grs[i];
-            var elements = obj.elements[gr];
-
-            if (is.array(elements)) {
-              updateEles(elements, gr);
-            }
-          }
-        }
-
-        // elements not specified in json should be removed
-        eles.stdFilter(function (ele) {
-          return !idInJson[ele.id()];
-        }).remove();
-      }
-
-      if (obj.style) {
-        cy.style(obj.style);
-      }
-
-      if (obj.zoom != null && obj.zoom !== _p.zoom) {
-        cy.zoom(obj.zoom);
-      }
-
-      if (obj.pan) {
-        if (obj.pan.x !== _p.pan.x || obj.pan.y !== _p.pan.y) {
-          cy.pan(obj.pan);
-        }
-      }
-
-      var fields = ['minZoom', 'maxZoom', 'zoomingEnabled', 'userZoomingEnabled', 'panningEnabled', 'userPanningEnabled', 'boxSelectionEnabled', 'autolock', 'autoungrabify', 'autounselectify'];
-
-      for (var _i = 0; _i < fields.length; _i++) {
-        var f = fields[_i];
-
-        if (obj[f] != null) {
-          cy[f](obj[f]);
-        }
-      }
-
-      cy.endBatch();
-
-      return this; // chaining
-    } else if (obj === undefined) {
-      // get
-      var json = {};
-
-      json.elements = {};
-      eles.forEach(function (ele) {
-        var group = ele.group();
-
-        if (!json.elements[group]) {
-          json.elements[group] = [];
-        }
-
-        json.elements[group].push(ele.json());
-      });
-
-      if (this._private.styleEnabled) {
-        json.style = cy.style().json();
-      }
-
-      json.zoomingEnabled = cy._private.zoomingEnabled;
-      json.userZoomingEnabled = cy._private.userZoomingEnabled;
-      json.zoom = cy._private.zoom;
-      json.minZoom = cy._private.minZoom;
-      json.maxZoom = cy._private.maxZoom;
-      json.panningEnabled = cy._private.panningEnabled;
-      json.userPanningEnabled = cy._private.userPanningEnabled;
-      json.pan = util.copy(cy._private.pan);
-      json.boxSelectionEnabled = cy._private.boxSelectionEnabled;
-      json.renderer = util.copy(cy._private.options.renderer);
-      json.hideEdgesOnViewport = cy._private.options.hideEdgesOnViewport;
-      json.textureOnViewport = cy._private.options.textureOnViewport;
-      json.wheelSensitivity = cy._private.options.wheelSensitivity;
-      json.motionBlur = cy._private.options.motionBlur;
-
-      return json;
-    }
-  },
-
-  scratch: define.data({
-    field: 'scratch',
-    bindingEvent: 'scratch',
-    allowBinding: true,
-    allowSetting: true,
-    settingEvent: 'scratch',
-    settingTriggersEvent: true,
-    triggerFnName: 'trigger',
-    allowGetting: true
-  }),
-
-  removeScratch: define.removeData({
-    field: 'scratch',
-    event: 'scratch',
-    triggerFnName: 'trigger',
-    triggerEvent: true
-  })
-
-});
-
-corefn.$id = corefn.getElementById;
-
-[__webpack_require__(73), __webpack_require__(74), __webpack_require__(82), __webpack_require__(83), __webpack_require__(84), __webpack_require__(85), __webpack_require__(86), __webpack_require__(87), __webpack_require__(88), __webpack_require__(96)].forEach(function (props) {
-  util.extend(corefn, props);
-});
-
-module.exports = Core;
-
-/***/ }),
-/* 16 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-module.exports = function memoize(fn, keyFn) {
-  if (!keyFn) {
-    keyFn = function keyFn() {
-      if (arguments.length === 1) {
-        return arguments[0];
-      } else if (arguments.length === 0) {
-        return 'undefined';
-      }
-
-      var args = [];
-
-      for (var i = 0; i < arguments.length; i++) {
-        args.push(arguments[i]);
-      }
-
-      return args.join('$');
-    };
-  }
-
-  var memoizedFn = function memoizedFn() {
-    var self = this;
-    var args = arguments;
-    var ret = void 0;
-    var k = keyFn.apply(self, args);
-    var cache = memoizedFn.cache;
-
-    if (!(ret = cache[k])) {
-      ret = cache[k] = fn.apply(self, args);
-    }
-
-    return ret;
-  };
-
-  memoizedFn.cache = {};
-
-  return memoizedFn;
-};
-
-/***/ }),
-/* 17 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-var util = __webpack_require__(1);
-var is = __webpack_require__(0);
-var Set = __webpack_require__(10);
-
-// represents a node or an edge
-var Element = function Element(cy, params, restore) {
-  restore = restore === undefined || restore ? true : false;
-
-  if (cy === undefined || params === undefined || !is.core(cy)) {
-    util.error('An element must have a core reference and parameters set');
-    return;
-  }
-
-  var group = params.group;
-
-  // try to automatically infer the group if unspecified
-  if (group == null) {
-    if (params.data && params.data.source != null && params.data.target != null) {
-      group = 'edges';
-    } else {
-      group = 'nodes';
-    }
-  }
-
-  // validate group
-  if (group !== 'nodes' && group !== 'edges') {
-    util.error('An element must be of type `nodes` or `edges`; you specified `' + group + '`');
-    return;
-  }
-
-  // make the element array-like, just like a collection
-  this.length = 1;
-  this[0] = this;
-
-  // NOTE: when something is added here, add also to ele.json()
-  var _p = this._private = {
-    cy: cy,
-    single: true, // indicates this is an element
-    data: params.data || {}, // data object
-    position: params.position || {}, // (x, y) position pair
-    autoWidth: undefined, // width and height of nodes calculated by the renderer when set to special 'auto' value
-    autoHeight: undefined,
-    autoPadding: undefined,
-    compoundBoundsClean: false, // whether the compound dimensions need to be recalculated the next time dimensions are read
-    listeners: [], // array of bound listeners
-    group: group, // string; 'nodes' or 'edges'
-    style: {}, // properties as set by the style
-    rstyle: {}, // properties for style sent from the renderer to the core
-    styleCxts: [], // applied style contexts from the styler
-    removed: true, // whether it's inside the vis; true if removed (set true here since we call restore)
-    selected: params.selected ? true : false, // whether it's selected
-    selectable: params.selectable === undefined ? true : params.selectable ? true : false, // whether it's selectable
-    locked: params.locked ? true : false, // whether the element is locked (cannot be moved)
-    grabbed: false, // whether the element is grabbed by the mouse; renderer sets this privately
-    grabbable: params.grabbable === undefined ? true : params.grabbable ? true : false, // whether the element can be grabbed
-    active: false, // whether the element is active from user interaction
-    classes: new Set(), // map ( className => true )
-    animation: { // object for currently-running animations
-      current: [],
-      queue: []
-    },
-    rscratch: {}, // object in which the renderer can store information
-    scratch: params.scratch || {}, // scratch objects
-    edges: [], // array of connected edges
-    children: [], // array of children
-    parent: null, // parent ref
-    traversalCache: {}, // cache of output of traversal functions
-    backgrounding: false // whether background images are loading
-  };
-
-  // renderedPosition overrides if specified
-  if (params.renderedPosition) {
-    var rpos = params.renderedPosition;
-    var pan = cy.pan();
-    var zoom = cy.zoom();
-
-    _p.position = {
-      x: (rpos.x - pan.x) / zoom,
-      y: (rpos.y - pan.y) / zoom
-    };
-  }
-
-  if (is.string(params.classes)) {
-    var classes = params.classes.split(/\s+/);
-    for (var i = 0, l = classes.length; i < l; i++) {
-      var cls = classes[i];
-      if (!cls || cls === '') {
-        continue;
-      }
-
-      _p.classes.add(cls);
-    }
-  }
-
-  if (params.style || params.css) {
-    cy.style().applyBypass(this, params.style || params.css);
-  }
-
-  this.createEmitter();
-
-  if (restore === undefined || restore) {
-    this.restore();
-  }
-};
-
-module.exports = Element;
-
-/***/ }),
-/* 18 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-var util = __webpack_require__(1);
-
-var stateSelectors = [{
-  selector: ':selected',
-  matches: function matches(ele) {
-    return ele.selected();
-  }
-}, {
-  selector: ':unselected',
-  matches: function matches(ele) {
-    return !ele.selected();
-  }
-}, {
-  selector: ':selectable',
-  matches: function matches(ele) {
-    return ele.selectable();
-  }
-}, {
-  selector: ':unselectable',
-  matches: function matches(ele) {
-    return !ele.selectable();
-  }
-}, {
-  selector: ':locked',
-  matches: function matches(ele) {
-    return ele.locked();
-  }
-}, {
-  selector: ':unlocked',
-  matches: function matches(ele) {
-    return !ele.locked();
-  }
-}, {
-  selector: ':visible',
-  matches: function matches(ele) {
-    return ele.visible();
-  }
-}, {
-  selector: ':hidden',
-  matches: function matches(ele) {
-    return !ele.visible();
-  }
-}, {
-  selector: ':transparent',
-  matches: function matches(ele) {
-    return ele.transparent();
-  }
-}, {
-  selector: ':grabbed',
-  matches: function matches(ele) {
-    return ele.grabbed();
-  }
-}, {
-  selector: ':free',
-  matches: function matches(ele) {
-    return !ele.grabbed();
-  }
-}, {
-  selector: ':removed',
-  matches: function matches(ele) {
-    return ele.removed();
-  }
-}, {
-  selector: ':inside',
-  matches: function matches(ele) {
-    return !ele.removed();
-  }
-}, {
-  selector: ':grabbable',
-  matches: function matches(ele) {
-    return ele.grabbable();
-  }
-}, {
-  selector: ':ungrabbable',
-  matches: function matches(ele) {
-    return !ele.grabbable();
-  }
-}, {
-  selector: ':animated',
-  matches: function matches(ele) {
-    return ele.animated();
-  }
-}, {
-  selector: ':unanimated',
-  matches: function matches(ele) {
-    return !ele.animated();
-  }
-}, {
-  selector: ':parent',
-  matches: function matches(ele) {
-    return ele.isParent();
-  }
-}, {
-  selector: ':childless',
-  matches: function matches(ele) {
-    return ele.isChildless();
-  }
-}, {
-  selector: ':child',
-  matches: function matches(ele) {
-    return ele.isChild();
-  }
-}, {
-  selector: ':orphan',
-  matches: function matches(ele) {
-    return ele.isOrphan();
-  }
-}, {
-  selector: ':nonorphan',
-  matches: function matches(ele) {
-    return ele.isChild();
-  }
-}, {
-  selector: ':loop',
-  matches: function matches(ele) {
-    return ele.isLoop();
-  }
-}, {
-  selector: ':simple',
-  matches: function matches(ele) {
-    return ele.isSimple();
-  }
-}, {
-  selector: ':active',
-  matches: function matches(ele) {
-    return ele.active();
-  }
-}, {
-  selector: ':inactive',
-  matches: function matches(ele) {
-    return !ele.active();
-  }
-}, {
-  selector: ':backgrounding',
-  matches: function matches(ele) {
-    return ele.backgrounding();
-  }
-}, {
-  selector: ':nonbackgrounding',
-  matches: function matches(ele) {
-    return !ele.backgrounding();
-  }
-}].sort(function (a, b) {
-  // n.b. selectors that are starting substrings of others must have the longer ones first
-  return util.sort.descending(a.selector, b.selector);
-});
-
-var stateSelectorMatches = function stateSelectorMatches(sel, ele) {
-  var lookup = stateSelectorMatches.lookup = stateSelectorMatches.lookup || function () {
-    var selToFn = {};
-    var s = void 0;
-
-    for (var i = 0; i < stateSelectors.length; i++) {
-      s = stateSelectors[i];
-
-      selToFn[s.selector] = s.matches;
-    }
-
-    return selToFn;
-  }();
-
-  return lookup[sel](ele);
-};
-
-var stateSelectorRegex = '(' + stateSelectors.map(function (s) {
-  return s.selector;
-}).join('|') + ')';
-
-module.exports = { stateSelectors: stateSelectors, stateSelectorMatches: stateSelectorMatches, stateSelectorRegex: stateSelectorRegex };
-
-/***/ }),
-/* 19 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-/*!
-Event object based on jQuery events, MIT license
-
-https://jquery.org/license/
-https://tldrlegal.com/license/mit-license
-https://github.com/jquery/jquery/blob/master/src/event.js
-*/
-
-var Event = function Event(src, props) {
-  this.recycle(src, props);
-};
-
-function returnFalse() {
-  return false;
-}
-
-function returnTrue() {
-  return true;
-}
-
-// http://www.w3.org/TR/2003/WD-DOM-Level-3-Events-20030331/ecma-script-binding.html
-Event.prototype = {
-  instanceString: function instanceString() {
-    return 'event';
-  },
-
-  recycle: function recycle(src, props) {
-    this.isImmediatePropagationStopped = this.isPropagationStopped = this.isDefaultPrevented = returnFalse;
-
-    if (src != null && src.preventDefault) {
-      // Browser Event object
-      this.type = src.type;
-
-      // Events bubbling up the document may have been marked as prevented
-      // by a handler lower down the tree; reflect the correct value.
-      this.isDefaultPrevented = src.defaultPrevented ? returnTrue : returnFalse;
-    } else if (src != null && src.type) {
-      // Plain object containing all event details
-      props = src;
-    } else {
-      // Event string
-      this.type = src;
-    }
-
-    // Put explicitly provided properties onto the event object
-    if (props != null) {
-      // more efficient to manually copy fields we use
-      this.originalEvent = props.originalEvent;
-      this.type = props.type != null ? props.type : this.type;
-      this.cy = props.cy;
-      this.target = props.target;
-      this.position = props.position;
-      this.renderedPosition = props.renderedPosition;
-      this.namespace = props.namespace;
-      this.layout = props.layout;
-    }
-
-    if (this.cy != null && this.position != null && this.renderedPosition == null) {
-      // create a rendered position based on the passed position
-      var pos = this.position;
-      var zoom = this.cy.zoom();
-      var pan = this.cy.pan();
-
-      this.renderedPosition = {
-        x: pos.x * zoom + pan.x,
-        y: pos.y * zoom + pan.y
-      };
-    }
-
-    // Create a timestamp if incoming event doesn't have one
-    this.timeStamp = src && src.timeStamp || Date.now();
-  },
-
-  preventDefault: function preventDefault() {
-    this.isDefaultPrevented = returnTrue;
-
-    var e = this.originalEvent;
-    if (!e) {
-      return;
-    }
-
-    // if preventDefault exists run it on the original event
-    if (e.preventDefault) {
-      e.preventDefault();
-    }
-  },
-
-  stopPropagation: function stopPropagation() {
-    this.isPropagationStopped = returnTrue;
-
-    var e = this.originalEvent;
-    if (!e) {
-      return;
-    }
-
-    // if stopPropagation exists run it on the original event
-    if (e.stopPropagation) {
-      e.stopPropagation();
-    }
-  },
-
-  stopImmediatePropagation: function stopImmediatePropagation() {
-    this.isImmediatePropagationStopped = returnTrue;
-    this.stopPropagation();
-  },
-
-  isDefaultPrevented: returnFalse,
-  isPropagationStopped: returnFalse,
-  isImmediatePropagationStopped: returnFalse
-};
-
-module.exports = Event;
-
-/***/ }),
-/* 20 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-/**
- *  Elements are drawn in a specific order based on compound depth (low to high), the element type (nodes above edges),
- *  and z-index (low to high).  These styles affect how this applies:
- *
- *  z-compound-depth: May be `bottom | orphan | auto | top`.  The first drawn is `bottom`, then `orphan` which is the
- *      same depth as the root of the compound graph, followed by the default value `auto` which draws in order from
- *      root to leaves of the compound graph.  The last drawn is `top`.
- *  z-index-compare: May be `auto | manual`.  The default value is `auto` which always draws edges under nodes.
- *      `manual` ignores this convention and draws based on the `z-index` value setting.
- *  z-index: An integer value that affects the relative draw order of elements.  In general, an element with a higher
- *      `z-index` will be drawn on top of an element with a lower `z-index`.
- */
-var util = __webpack_require__(1);
-
-var zIndexSort = function zIndexSort(a, b) {
-  var cy = a.cy();
-  var hasCompoundNodes = cy.hasCompoundNodes();
-
-  function getDepth(ele) {
-    var style = ele.pstyle('z-compound-depth');
-    if (style.value === 'auto') {
-      return hasCompoundNodes ? ele.zDepth() : 0;
-    } else if (style.value === 'bottom') {
-      return -1;
-    } else if (style.value === 'top') {
-      return util.MAX_INT;
-    }
-    // 'orphan'
-    return 0;
-  }
-  var depthDiff = getDepth(a) - getDepth(b);
-  if (depthDiff !== 0) {
-    return depthDiff;
-  }
-
-  function getEleDepth(ele) {
-    var style = ele.pstyle('z-index-compare');
-    if (style.value === 'auto') {
-      return ele.isNode() ? 1 : 0;
-    }
-    // 'manual'
-    return 0;
-  }
-  var eleDiff = getEleDepth(a) - getEleDepth(b);
-  if (eleDiff !== 0) {
-    return eleDiff;
-  }
-
-  var zDiff = a.pstyle('z-index').value - b.pstyle('z-index').value;
-  if (zDiff !== 0) {
-    return zDiff;
-  }
-  // compare indices in the core (order added to graph w/ last on top)
-  return a.poolIndex() - b.poolIndex();
-};
-
-module.exports = zIndexSort;
-
-/***/ }),
-/* 21 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-var is = __webpack_require__(0);
-var util = __webpack_require__(1);
-var Selector = __webpack_require__(6);
-
-var Style = function Style(cy) {
-
-  if (!(this instanceof Style)) {
-    return new Style(cy);
-  }
-
-  if (!is.core(cy)) {
-    util.error('A style must have a core reference');
-    return;
-  }
-
-  this._private = {
-    cy: cy,
-    coreStyle: {}
-  };
-
-  this.length = 0;
-
-  this.resetToDefault();
-};
-
-var styfn = Style.prototype;
-
-styfn.instanceString = function () {
-  return 'style';
-};
-
-// remove all contexts
-styfn.clear = function () {
-  for (var i = 0; i < this.length; i++) {
-    this[i] = undefined;
-  }
-  this.length = 0;
-
-  var _p = this._private;
-
-  _p.newStyle = true;
-
-  return this; // chaining
-};
-
-styfn.resetToDefault = function () {
-  this.clear();
-  this.addDefaultStylesheet();
-
-  return this;
-};
-
-// builds a style object for the 'core' selector
-styfn.core = function () {
-  return this._private.coreStyle;
-};
-
-// create a new context from the specified selector string and switch to that context
-styfn.selector = function (selectorStr) {
-  // 'core' is a special case and does not need a selector
-  var selector = selectorStr === 'core' ? null : new Selector(selectorStr);
-
-  var i = this.length++; // new context means new index
-  this[i] = {
-    selector: selector,
-    properties: [],
-    mappedProperties: [],
-    index: i
-  };
-
-  return this; // chaining
-};
-
-// add one or many css rules to the current context
-styfn.css = function () {
-  var self = this;
-  var args = arguments;
-
-  switch (args.length) {
-    case 1:
-      var map = args[0];
-
-      for (var i = 0; i < self.properties.length; i++) {
-        var prop = self.properties[i];
-        var mapVal = map[prop.name];
-
-        if (mapVal === undefined) {
-          mapVal = map[util.dash2camel(prop.name)];
-        }
-
-        if (mapVal !== undefined) {
-          this.cssRule(prop.name, mapVal);
-        }
-      }
-
-      break;
-
-    case 2:
-      this.cssRule(args[0], args[1]);
-      break;
-
-    default:
-      break; // do nothing if args are invalid
-  }
-
-  return this; // chaining
-};
-styfn.style = styfn.css;
-
-// add a single css rule to the current context
-styfn.cssRule = function (name, value) {
-  // name-value pair
-  var property = this.parse(name, value);
-
-  // add property to current context if valid
-  if (property) {
-    var i = this.length - 1;
-    this[i].properties.push(property);
-    this[i].properties[property.name] = property; // allow access by name as well
-
-    if (property.name.match(/pie-(\d+)-background-size/) && property.value) {
-      this._private.hasPie = true;
-    }
-
-    if (property.mapped) {
-      this[i].mappedProperties.push(property);
-    }
-
-    // add to core style if necessary
-    var currentSelectorIsCore = !this[i].selector;
-    if (currentSelectorIsCore) {
-      this._private.coreStyle[property.name] = property;
-    }
-  }
-
-  return this; // chaining
-};
-
-styfn.append = function (style) {
-  if (is.stylesheet(style)) {
-    style.appendToStyle(this);
-  } else if (is.array(style)) {
-    this.appendFromJson(style);
-  } else if (is.string(style)) {
-    this.appendFromString(style);
-  } // you probably wouldn't want to append a Style, since you'd duplicate the default parts
-
-  return this;
-};
-
-// static function
-Style.fromJson = function (cy, json) {
-  var style = new Style(cy);
-
-  style.fromJson(json);
-
-  return style;
-};
-
-Style.fromString = function (cy, string) {
-  return new Style(cy).fromString(string);
-};
-
-[__webpack_require__(89), __webpack_require__(90), __webpack_require__(91), __webpack_require__(92), __webpack_require__(93), __webpack_require__(94), __webpack_require__(22), __webpack_require__(95)].forEach(function (props) {
-  util.extend(styfn, props);
-});
-
-Style.types = styfn.types;
-Style.properties = styfn.properties;
-
-module.exports = Style;
-
-/***/ }),
-/* 22 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -5222,6 +5108,1394 @@ styfn.addDefaultStylesheet = function () {
 module.exports = styfn;
 
 /***/ }),
+/* 15 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var util = __webpack_require__(1);
+var is = __webpack_require__(0);
+var Event = __webpack_require__(20);
+
+var eventRegex = /^([^.]+)(\.(?:[^.]+))?$/; // regex for matching event strings (e.g. "click.namespace")
+var universalNamespace = '.*'; // matches as if no namespace specified and prevents users from unbinding accidentally
+
+var defaults = {
+  qualifierCompare: function qualifierCompare(q1, q2) {
+    return q1 === q2;
+  },
+  eventMatches: function eventMatches() /*context, listener, eventObj*/{
+    return true;
+  },
+  eventFields: function eventFields() /*context*/{
+    return {};
+  },
+  callbackContext: function callbackContext(context /*, listener, eventObj*/) {
+    return context;
+  },
+  beforeEmit: function beforeEmit() /* context, listener, eventObj */{},
+  afterEmit: function afterEmit() /* context, listener, eventObj */{},
+  bubble: function bubble() /*context*/{
+    return false;
+  },
+  parent: function parent() /*context*/{
+    return null;
+  },
+  context: undefined
+};
+
+function Emitter(opts) {
+  util.assign(this, defaults, opts);
+
+  this.listeners = [];
+  this.emitting = 0;
+}
+
+var p = Emitter.prototype;
+
+var forEachEvent = function forEachEvent(self, handler, events, qualifier, callback, conf, confOverrides) {
+  if (is.fn(qualifier)) {
+    callback = qualifier;
+    qualifier = null;
+  }
+
+  if (confOverrides) {
+    if (conf == null) {
+      conf = confOverrides;
+    } else {
+      conf = util.assign({}, conf, confOverrides);
+    }
+  }
+
+  var eventList = events.split(/\s+/);
+
+  for (var i = 0; i < eventList.length; i++) {
+    var evt = eventList[i];
+
+    if (is.emptyString(evt)) {
+      continue;
+    }
+
+    var match = evt.match(eventRegex); // type[.namespace]
+
+    if (match) {
+      var type = match[1];
+      var namespace = match[2] ? match[2] : null;
+      var ret = handler(self, evt, type, namespace, qualifier, callback, conf);
+
+      if (ret === false) {
+        break;
+      } // allow exiting early
+    }
+  }
+};
+
+var makeEventObj = function makeEventObj(self, obj) {
+  return new Event(obj.type, util.assign(obj, self.eventFields(self.context)));
+};
+
+var forEachEventObj = function forEachEventObj(self, handler, events) {
+  if (is.event(events)) {
+    handler(self, events);
+
+    return;
+  } else if (is.plainObject(events)) {
+    handler(self, makeEventObj(self, events));
+
+    return;
+  }
+
+  var eventList = events.split(/\s+/);
+
+  for (var i = 0; i < eventList.length; i++) {
+    var evt = eventList[i];
+
+    if (is.emptyString(evt)) {
+      continue;
+    }
+
+    var match = evt.match(eventRegex); // type[.namespace]
+
+    if (match) {
+      var type = match[1];
+      var namespace = match[2] ? match[2] : null;
+      var eventObj = makeEventObj(self, {
+        type: type,
+        namespace: namespace,
+        target: self.context
+      });
+
+      handler(self, eventObj);
+    }
+  }
+};
+
+p.on = p.addListener = function (events, qualifier, callback, conf, confOverrides) {
+  forEachEvent(this, function (self, event, type, namespace, qualifier, callback, conf) {
+    if (is.fn(callback)) {
+      self.listeners.push({
+        event: event, // full event string
+        callback: callback, // callback to run
+        type: type, // the event type (e.g. 'click')
+        namespace: namespace, // the event namespace (e.g. ".foo")
+        qualifier: qualifier, // a restriction on whether to match this emitter
+        conf: conf // additional configuration
+      });
+    }
+  }, events, qualifier, callback, conf, confOverrides);
+
+  return this;
+};
+
+p.one = function (events, qualifier, callback, conf) {
+  return this.on(events, qualifier, callback, conf, { one: true });
+};
+
+p.removeListener = p.off = function (events, qualifier, callback, conf) {
+  var _this = this;
+
+  if (this.emitting !== 0) {
+    this.listeners = util.copyArray(this.listeners);
+  }
+
+  var listeners = this.listeners;
+
+  var _loop = function _loop(i) {
+    var listener = listeners[i];
+
+    forEachEvent(_this, function (self, event, type, namespace, qualifier, callback /*, conf*/) {
+      if (listener.type === type && (!namespace || listener.namespace === namespace) && (!qualifier || self.qualifierCompare(listener.qualifier, qualifier)) && (!callback || listener.callback === callback)) {
+        listeners.splice(i, 1);
+
+        return false;
+      }
+    }, events, qualifier, callback, conf);
+  };
+
+  for (var i = listeners.length - 1; i >= 0; i--) {
+    _loop(i);
+  }
+
+  return this;
+};
+
+p.emit = p.trigger = function (events, extraParams, manualCallback) {
+  var listeners = this.listeners;
+  var numListenersBeforeEmit = listeners.length;
+
+  this.emitting++;
+
+  if (!is.array(extraParams)) {
+    extraParams = [extraParams];
+  }
+
+  forEachEventObj(this, function (self, eventObj) {
+    if (manualCallback != null) {
+      listeners = [{
+        event: eventObj.event,
+        type: eventObj.type,
+        namespace: eventObj.namespace,
+        callback: manualCallback
+      }];
+
+      numListenersBeforeEmit = listeners.length;
+    }
+
+    var _loop2 = function _loop2(i) {
+      var listener = listeners[i];
+
+      if (listener.type === eventObj.type && (!listener.namespace || listener.namespace === eventObj.namespace || listener.namespace === universalNamespace) && self.eventMatches(self.context, listener, eventObj)) {
+        var args = [eventObj];
+
+        if (extraParams != null) {
+          util.push(args, extraParams);
+        }
+
+        self.beforeEmit(self.context, listener, eventObj);
+
+        if (listener.conf && listener.conf.one) {
+          self.listeners = self.listeners.filter(function (l) {
+            return l !== listener;
+          });
+        }
+
+        var context = self.callbackContext(self.context, listener, eventObj);
+        var ret = listener.callback.apply(context, args);
+
+        self.afterEmit(self.context, listener, eventObj);
+
+        if (ret === false) {
+          eventObj.stopPropagation();
+          eventObj.preventDefault();
+        }
+      } // if listener matches
+    };
+
+    for (var i = 0; i < numListenersBeforeEmit; i++) {
+      _loop2(i);
+    } // for listener
+
+    if (self.bubble(self.context) && !eventObj.isPropagationStopped()) {
+      self.parent(self.context).emit(eventObj, extraParams);
+    }
+  }, events);
+
+  this.emitting--;
+
+  return this;
+};
+
+module.exports = Emitter;
+
+/***/ }),
+/* 16 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var window = __webpack_require__(3);
+var util = __webpack_require__(1);
+var Collection = __webpack_require__(8);
+var is = __webpack_require__(0);
+var Promise = __webpack_require__(5);
+var define = __webpack_require__(4);
+
+var Core = function Core(opts) {
+  var cy = this;
+
+  opts = util.extend({}, opts);
+
+  var container = opts.container;
+
+  // allow for passing a wrapped jquery object
+  // e.g. cytoscape({ container: $('#cy') })
+  if (container && !is.htmlElement(container) && is.htmlElement(container[0])) {
+    container = container[0];
+  }
+
+  var reg = container ? container._cyreg : null; // e.g. already registered some info (e.g. readies) via jquery
+  reg = reg || {};
+
+  if (reg && reg.cy) {
+    reg.cy.destroy();
+
+    reg = {}; // old instance => replace reg completely
+  }
+
+  var readies = reg.readies = reg.readies || [];
+
+  if (container) {
+    container._cyreg = reg;
+  } // make sure container assoc'd reg points to this cy
+  reg.cy = cy;
+
+  var head = window !== undefined && container !== undefined && !opts.headless;
+  var options = opts;
+  options.layout = util.extend({ name: head ? 'grid' : 'null' }, options.layout);
+  options.renderer = util.extend({ name: head ? 'canvas' : 'null' }, options.renderer);
+
+  var defVal = function defVal(def, val, altVal) {
+    if (val !== undefined) {
+      return val;
+    } else if (altVal !== undefined) {
+      return altVal;
+    } else {
+      return def;
+    }
+  };
+
+  var _p = this._private = {
+    container: container, // html dom ele container
+    ready: false, // whether ready has been triggered
+    options: options, // cached options
+    elements: new Collection(this), // elements in the graph
+    listeners: [], // list of listeners
+    aniEles: new Collection(this), // elements being animated
+    scratch: {}, // scratch object for core
+    layout: null,
+    renderer: null,
+    destroyed: false, // whether destroy was called
+    notificationsEnabled: true, // whether notifications are sent to the renderer
+    minZoom: 1e-50,
+    maxZoom: 1e50,
+    zoomingEnabled: defVal(true, options.zoomingEnabled),
+    userZoomingEnabled: defVal(true, options.userZoomingEnabled),
+    panningEnabled: defVal(true, options.panningEnabled),
+    userPanningEnabled: defVal(true, options.userPanningEnabled),
+    boxSelectionEnabled: defVal(true, options.boxSelectionEnabled),
+    autolock: defVal(false, options.autolock, options.autolockNodes),
+    autoungrabify: defVal(false, options.autoungrabify, options.autoungrabifyNodes),
+    autounselectify: defVal(false, options.autounselectify),
+    styleEnabled: options.styleEnabled === undefined ? head : options.styleEnabled,
+    zoom: is.number(options.zoom) ? options.zoom : 1,
+    pan: {
+      x: is.plainObject(options.pan) && is.number(options.pan.x) ? options.pan.x : 0,
+      y: is.plainObject(options.pan) && is.number(options.pan.y) ? options.pan.y : 0
+    },
+    animation: { // object for currently-running animations
+      current: [],
+      queue: []
+    },
+    hasCompoundNodes: false
+  };
+
+  this.createEmitter();
+
+  // set selection type
+  var selType = options.selectionType;
+  if (selType === undefined || selType !== 'additive' && selType !== 'single') {
+    // then set default
+
+    _p.selectionType = 'single';
+  } else {
+    _p.selectionType = selType;
+  }
+
+  // init zoom bounds
+  if (is.number(options.minZoom) && is.number(options.maxZoom) && options.minZoom < options.maxZoom) {
+    _p.minZoom = options.minZoom;
+    _p.maxZoom = options.maxZoom;
+  } else if (is.number(options.minZoom) && options.maxZoom === undefined) {
+    _p.minZoom = options.minZoom;
+  } else if (is.number(options.maxZoom) && options.minZoom === undefined) {
+    _p.maxZoom = options.maxZoom;
+  }
+
+  var loadExtData = function loadExtData(extData, next) {
+    var anyIsPromise = extData.some(is.promise);
+
+    if (anyIsPromise) {
+      return Promise.all(extData).then(next); // load all data asynchronously, then exec rest of init
+    } else {
+      next(extData); // exec synchronously for convenience
+    }
+  };
+
+  // start with the default stylesheet so we have something before loading an external stylesheet
+  if (_p.styleEnabled) {
+    cy.setStyle([]);
+  }
+
+  // create the renderer
+  cy.initRenderer(util.extend({
+    hideEdgesOnViewport: options.hideEdgesOnViewport,
+    textureOnViewport: options.textureOnViewport,
+    wheelSensitivity: is.number(options.wheelSensitivity) && options.wheelSensitivity > 0 ? options.wheelSensitivity : 1,
+    motionBlur: options.motionBlur === undefined ? false : options.motionBlur, // off by default
+    motionBlurOpacity: options.motionBlurOpacity === undefined ? 0.05 : options.motionBlurOpacity,
+    pixelRatio: is.number(options.pixelRatio) && options.pixelRatio > 0 ? options.pixelRatio : undefined,
+    desktopTapThreshold: options.desktopTapThreshold === undefined ? 4 : options.desktopTapThreshold,
+    touchTapThreshold: options.touchTapThreshold === undefined ? 8 : options.touchTapThreshold
+  }, options.renderer));
+
+  var setElesAndLayout = function setElesAndLayout(elements, onload, ondone) {
+    cy.notifications(false);
+
+    // remove old elements
+    var oldEles = cy.mutableElements();
+    if (oldEles.length > 0) {
+      oldEles.remove();
+    }
+
+    if (elements != null) {
+      if (is.plainObject(elements) || is.array(elements)) {
+        cy.add(elements);
+      }
+    }
+
+    cy.one('layoutready', function (e) {
+      cy.notifications(true);
+      cy.emit(e); // we missed this event by turning notifications off, so pass it on
+
+      cy.notify({
+        type: 'load',
+        eles: cy.mutableElements()
+      });
+
+      cy.one('load', onload);
+      cy.emit('load');
+    }).one('layoutstop', function () {
+      cy.one('done', ondone);
+      cy.emit('done');
+    });
+
+    var layoutOpts = util.extend({}, cy._private.options.layout);
+    layoutOpts.eles = cy.elements();
+
+    cy.layout(layoutOpts).run();
+  };
+
+  loadExtData([options.style, options.elements], function (thens) {
+    var initStyle = thens[0];
+    var initEles = thens[1];
+
+    // init style
+    if (_p.styleEnabled) {
+      cy.style().append(initStyle);
+    }
+
+    // initial load
+    setElesAndLayout(initEles, function () {
+      // onready
+      cy.startAnimationLoop();
+      _p.ready = true;
+
+      // if a ready callback is specified as an option, the bind it
+      if (is.fn(options.ready)) {
+        cy.on('ready', options.ready);
+      }
+
+      // bind all the ready handlers registered before creating this instance
+      for (var i = 0; i < readies.length; i++) {
+        var fn = readies[i];
+        cy.on('ready', fn);
+      }
+      if (reg) {
+        reg.readies = [];
+      } // clear b/c we've bound them all and don't want to keep it around in case a new core uses the same div etc
+
+      cy.emit('ready');
+    }, options.done);
+  });
+};
+
+var corefn = Core.prototype; // short alias
+
+util.extend(corefn, {
+  instanceString: function instanceString() {
+    return 'core';
+  },
+
+  isReady: function isReady() {
+    return this._private.ready;
+  },
+
+  isDestroyed: function isDestroyed() {
+    return this._private.destroyed;
+  },
+
+  ready: function ready(fn) {
+    if (this.isReady()) {
+      this.emitter().emit('ready', [], fn); // just calls fn as though triggered via ready event
+    } else {
+      this.on('ready', fn);
+    }
+
+    return this;
+  },
+
+  destroy: function destroy() {
+    var cy = this;
+    if (cy.isDestroyed()) return;
+
+    cy.stopAnimationLoop();
+
+    cy.destroyRenderer();
+
+    this.emit('destroy');
+
+    cy._private.destroyed = true;
+
+    return cy;
+  },
+
+  hasElementWithId: function hasElementWithId(id) {
+    return this._private.elements.hasElementWithId(id);
+  },
+
+  getElementById: function getElementById(id) {
+    return this._private.elements.getElementById(id);
+  },
+
+  selectionType: function selectionType() {
+    return this._private.selectionType;
+  },
+
+  hasCompoundNodes: function hasCompoundNodes() {
+    return this._private.hasCompoundNodes;
+  },
+
+  headless: function headless() {
+    return this._private.options.renderer.name === 'null';
+  },
+
+  styleEnabled: function styleEnabled() {
+    return this._private.styleEnabled;
+  },
+
+  addToPool: function addToPool(eles) {
+    this._private.elements.merge(eles);
+
+    return this; // chaining
+  },
+
+  removeFromPool: function removeFromPool(eles) {
+    this._private.elements.unmerge(eles);
+
+    return this;
+  },
+
+  container: function container() {
+    return this._private.container;
+  },
+
+  options: function options() {
+    return util.copy(this._private.options);
+  },
+
+  json: function json(obj) {
+    var cy = this;
+    var _p = cy._private;
+    var eles = cy.mutableElements();
+
+    if (is.plainObject(obj)) {
+      // set
+
+      cy.startBatch();
+
+      if (obj.elements) {
+        var idInJson = {};
+
+        var updateEles = function updateEles(jsons, gr) {
+          for (var i = 0; i < jsons.length; i++) {
+            var json = jsons[i];
+            var id = json.data.id;
+            var ele = cy.getElementById(id);
+
+            idInJson[id] = true;
+
+            if (ele.length !== 0) {
+              // existing element should be updated
+              ele.json(json);
+            } else {
+              // otherwise should be added
+              if (gr) {
+                cy.add(util.extend({ group: gr }, json));
+              } else {
+                cy.add(json);
+              }
+            }
+          }
+        };
+
+        if (is.array(obj.elements)) {
+          // elements: []
+          updateEles(obj.elements);
+        } else {
+          // elements: { nodes: [], edges: [] }
+          var grs = ['nodes', 'edges'];
+          for (var i = 0; i < grs.length; i++) {
+            var gr = grs[i];
+            var elements = obj.elements[gr];
+
+            if (is.array(elements)) {
+              updateEles(elements, gr);
+            }
+          }
+        }
+
+        // elements not specified in json should be removed
+        eles.stdFilter(function (ele) {
+          return !idInJson[ele.id()];
+        }).remove();
+      }
+
+      if (obj.style) {
+        cy.style(obj.style);
+      }
+
+      if (obj.zoom != null && obj.zoom !== _p.zoom) {
+        cy.zoom(obj.zoom);
+      }
+
+      if (obj.pan) {
+        if (obj.pan.x !== _p.pan.x || obj.pan.y !== _p.pan.y) {
+          cy.pan(obj.pan);
+        }
+      }
+
+      var fields = ['minZoom', 'maxZoom', 'zoomingEnabled', 'userZoomingEnabled', 'panningEnabled', 'userPanningEnabled', 'boxSelectionEnabled', 'autolock', 'autoungrabify', 'autounselectify'];
+
+      for (var _i = 0; _i < fields.length; _i++) {
+        var f = fields[_i];
+
+        if (obj[f] != null) {
+          cy[f](obj[f]);
+        }
+      }
+
+      cy.endBatch();
+
+      return this; // chaining
+    } else if (obj === undefined) {
+      // get
+      var json = {};
+
+      json.elements = {};
+      eles.forEach(function (ele) {
+        var group = ele.group();
+
+        if (!json.elements[group]) {
+          json.elements[group] = [];
+        }
+
+        json.elements[group].push(ele.json());
+      });
+
+      if (this._private.styleEnabled) {
+        json.style = cy.style().json();
+      }
+
+      json.zoomingEnabled = cy._private.zoomingEnabled;
+      json.userZoomingEnabled = cy._private.userZoomingEnabled;
+      json.zoom = cy._private.zoom;
+      json.minZoom = cy._private.minZoom;
+      json.maxZoom = cy._private.maxZoom;
+      json.panningEnabled = cy._private.panningEnabled;
+      json.userPanningEnabled = cy._private.userPanningEnabled;
+      json.pan = util.copy(cy._private.pan);
+      json.boxSelectionEnabled = cy._private.boxSelectionEnabled;
+      json.renderer = util.copy(cy._private.options.renderer);
+      json.hideEdgesOnViewport = cy._private.options.hideEdgesOnViewport;
+      json.textureOnViewport = cy._private.options.textureOnViewport;
+      json.wheelSensitivity = cy._private.options.wheelSensitivity;
+      json.motionBlur = cy._private.options.motionBlur;
+
+      return json;
+    }
+  },
+
+  scratch: define.data({
+    field: 'scratch',
+    bindingEvent: 'scratch',
+    allowBinding: true,
+    allowSetting: true,
+    settingEvent: 'scratch',
+    settingTriggersEvent: true,
+    triggerFnName: 'trigger',
+    allowGetting: true
+  }),
+
+  removeScratch: define.removeData({
+    field: 'scratch',
+    event: 'scratch',
+    triggerFnName: 'trigger',
+    triggerEvent: true
+  })
+
+});
+
+corefn.$id = corefn.getElementById;
+
+[__webpack_require__(73), __webpack_require__(74), __webpack_require__(82), __webpack_require__(83), __webpack_require__(84), __webpack_require__(85), __webpack_require__(86), __webpack_require__(87), __webpack_require__(88), __webpack_require__(96)].forEach(function (props) {
+  util.extend(corefn, props);
+});
+
+module.exports = Core;
+
+/***/ }),
+/* 17 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+module.exports = function memoize(fn, keyFn) {
+  if (!keyFn) {
+    keyFn = function keyFn() {
+      if (arguments.length === 1) {
+        return arguments[0];
+      } else if (arguments.length === 0) {
+        return 'undefined';
+      }
+
+      var args = [];
+
+      for (var i = 0; i < arguments.length; i++) {
+        args.push(arguments[i]);
+      }
+
+      return args.join('$');
+    };
+  }
+
+  var memoizedFn = function memoizedFn() {
+    var self = this;
+    var args = arguments;
+    var ret = void 0;
+    var k = keyFn.apply(self, args);
+    var cache = memoizedFn.cache;
+
+    if (!(ret = cache[k])) {
+      ret = cache[k] = fn.apply(self, args);
+    }
+
+    return ret;
+  };
+
+  memoizedFn.cache = {};
+
+  return memoizedFn;
+};
+
+/***/ }),
+/* 18 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var util = __webpack_require__(1);
+var is = __webpack_require__(0);
+var Set = __webpack_require__(10);
+
+// represents a node or an edge
+var Element = function Element(cy, params, restore) {
+  restore = restore === undefined || restore ? true : false;
+
+  if (cy === undefined || params === undefined || !is.core(cy)) {
+    util.error('An element must have a core reference and parameters set');
+    return;
+  }
+
+  var group = params.group;
+
+  // try to automatically infer the group if unspecified
+  if (group == null) {
+    if (params.data && params.data.source != null && params.data.target != null) {
+      group = 'edges';
+    } else {
+      group = 'nodes';
+    }
+  }
+
+  // validate group
+  if (group !== 'nodes' && group !== 'edges') {
+    util.error('An element must be of type `nodes` or `edges`; you specified `' + group + '`');
+    return;
+  }
+
+  // make the element array-like, just like a collection
+  this.length = 1;
+  this[0] = this;
+
+  // NOTE: when something is added here, add also to ele.json()
+  var _p = this._private = {
+    cy: cy,
+    single: true, // indicates this is an element
+    data: params.data || {}, // data object
+    position: params.position || {}, // (x, y) position pair
+    autoWidth: undefined, // width and height of nodes calculated by the renderer when set to special 'auto' value
+    autoHeight: undefined,
+    autoPadding: undefined,
+    compoundBoundsClean: false, // whether the compound dimensions need to be recalculated the next time dimensions are read
+    listeners: [], // array of bound listeners
+    group: group, // string; 'nodes' or 'edges'
+    style: {}, // properties as set by the style
+    rstyle: {}, // properties for style sent from the renderer to the core
+    styleCxts: [], // applied style contexts from the styler
+    removed: true, // whether it's inside the vis; true if removed (set true here since we call restore)
+    selected: params.selected ? true : false, // whether it's selected
+    selectable: params.selectable === undefined ? true : params.selectable ? true : false, // whether it's selectable
+    locked: params.locked ? true : false, // whether the element is locked (cannot be moved)
+    grabbed: false, // whether the element is grabbed by the mouse; renderer sets this privately
+    grabbable: params.grabbable === undefined ? true : params.grabbable ? true : false, // whether the element can be grabbed
+    active: false, // whether the element is active from user interaction
+    classes: new Set(), // map ( className => true )
+    animation: { // object for currently-running animations
+      current: [],
+      queue: []
+    },
+    rscratch: {}, // object in which the renderer can store information
+    scratch: params.scratch || {}, // scratch objects
+    edges: [], // array of connected edges
+    children: [], // array of children
+    parent: null, // parent ref
+    traversalCache: {}, // cache of output of traversal functions
+    backgrounding: false // whether background images are loading
+  };
+
+  // renderedPosition overrides if specified
+  if (params.renderedPosition) {
+    var rpos = params.renderedPosition;
+    var pan = cy.pan();
+    var zoom = cy.zoom();
+
+    _p.position = {
+      x: (rpos.x - pan.x) / zoom,
+      y: (rpos.y - pan.y) / zoom
+    };
+  }
+
+  if (is.string(params.classes)) {
+    var classes = params.classes.split(/\s+/);
+    for (var i = 0, l = classes.length; i < l; i++) {
+      var cls = classes[i];
+      if (!cls || cls === '') {
+        continue;
+      }
+
+      _p.classes.add(cls);
+    }
+  }
+
+  if (params.style || params.css) {
+    cy.style().applyBypass(this, params.style || params.css);
+  }
+
+  this.createEmitter();
+
+  if (restore === undefined || restore) {
+    this.restore();
+  }
+};
+
+module.exports = Element;
+
+/***/ }),
+/* 19 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var util = __webpack_require__(1);
+
+var stateSelectors = [{
+  selector: ':selected',
+  matches: function matches(ele) {
+    return ele.selected();
+  }
+}, {
+  selector: ':unselected',
+  matches: function matches(ele) {
+    return !ele.selected();
+  }
+}, {
+  selector: ':selectable',
+  matches: function matches(ele) {
+    return ele.selectable();
+  }
+}, {
+  selector: ':unselectable',
+  matches: function matches(ele) {
+    return !ele.selectable();
+  }
+}, {
+  selector: ':locked',
+  matches: function matches(ele) {
+    return ele.locked();
+  }
+}, {
+  selector: ':unlocked',
+  matches: function matches(ele) {
+    return !ele.locked();
+  }
+}, {
+  selector: ':visible',
+  matches: function matches(ele) {
+    return ele.visible();
+  }
+}, {
+  selector: ':hidden',
+  matches: function matches(ele) {
+    return !ele.visible();
+  }
+}, {
+  selector: ':transparent',
+  matches: function matches(ele) {
+    return ele.transparent();
+  }
+}, {
+  selector: ':grabbed',
+  matches: function matches(ele) {
+    return ele.grabbed();
+  }
+}, {
+  selector: ':free',
+  matches: function matches(ele) {
+    return !ele.grabbed();
+  }
+}, {
+  selector: ':removed',
+  matches: function matches(ele) {
+    return ele.removed();
+  }
+}, {
+  selector: ':inside',
+  matches: function matches(ele) {
+    return !ele.removed();
+  }
+}, {
+  selector: ':grabbable',
+  matches: function matches(ele) {
+    return ele.grabbable();
+  }
+}, {
+  selector: ':ungrabbable',
+  matches: function matches(ele) {
+    return !ele.grabbable();
+  }
+}, {
+  selector: ':animated',
+  matches: function matches(ele) {
+    return ele.animated();
+  }
+}, {
+  selector: ':unanimated',
+  matches: function matches(ele) {
+    return !ele.animated();
+  }
+}, {
+  selector: ':parent',
+  matches: function matches(ele) {
+    return ele.isParent();
+  }
+}, {
+  selector: ':childless',
+  matches: function matches(ele) {
+    return ele.isChildless();
+  }
+}, {
+  selector: ':child',
+  matches: function matches(ele) {
+    return ele.isChild();
+  }
+}, {
+  selector: ':orphan',
+  matches: function matches(ele) {
+    return ele.isOrphan();
+  }
+}, {
+  selector: ':nonorphan',
+  matches: function matches(ele) {
+    return ele.isChild();
+  }
+}, {
+  selector: ':loop',
+  matches: function matches(ele) {
+    return ele.isLoop();
+  }
+}, {
+  selector: ':simple',
+  matches: function matches(ele) {
+    return ele.isSimple();
+  }
+}, {
+  selector: ':active',
+  matches: function matches(ele) {
+    return ele.active();
+  }
+}, {
+  selector: ':inactive',
+  matches: function matches(ele) {
+    return !ele.active();
+  }
+}, {
+  selector: ':backgrounding',
+  matches: function matches(ele) {
+    return ele.backgrounding();
+  }
+}, {
+  selector: ':nonbackgrounding',
+  matches: function matches(ele) {
+    return !ele.backgrounding();
+  }
+}].sort(function (a, b) {
+  // n.b. selectors that are starting substrings of others must have the longer ones first
+  return util.sort.descending(a.selector, b.selector);
+});
+
+var stateSelectorMatches = function stateSelectorMatches(sel, ele) {
+  var lookup = stateSelectorMatches.lookup = stateSelectorMatches.lookup || function () {
+    var selToFn = {};
+    var s = void 0;
+
+    for (var i = 0; i < stateSelectors.length; i++) {
+      s = stateSelectors[i];
+
+      selToFn[s.selector] = s.matches;
+    }
+
+    return selToFn;
+  }();
+
+  return lookup[sel](ele);
+};
+
+var stateSelectorRegex = '(' + stateSelectors.map(function (s) {
+  return s.selector;
+}).join('|') + ')';
+
+module.exports = { stateSelectors: stateSelectors, stateSelectorMatches: stateSelectorMatches, stateSelectorRegex: stateSelectorRegex };
+
+/***/ }),
+/* 20 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+/*!
+Event object based on jQuery events, MIT license
+
+https://jquery.org/license/
+https://tldrlegal.com/license/mit-license
+https://github.com/jquery/jquery/blob/master/src/event.js
+*/
+
+var Event = function Event(src, props) {
+  this.recycle(src, props);
+};
+
+function returnFalse() {
+  return false;
+}
+
+function returnTrue() {
+  return true;
+}
+
+// http://www.w3.org/TR/2003/WD-DOM-Level-3-Events-20030331/ecma-script-binding.html
+Event.prototype = {
+  instanceString: function instanceString() {
+    return 'event';
+  },
+
+  recycle: function recycle(src, props) {
+    this.isImmediatePropagationStopped = this.isPropagationStopped = this.isDefaultPrevented = returnFalse;
+
+    if (src != null && src.preventDefault) {
+      // Browser Event object
+      this.type = src.type;
+
+      // Events bubbling up the document may have been marked as prevented
+      // by a handler lower down the tree; reflect the correct value.
+      this.isDefaultPrevented = src.defaultPrevented ? returnTrue : returnFalse;
+    } else if (src != null && src.type) {
+      // Plain object containing all event details
+      props = src;
+    } else {
+      // Event string
+      this.type = src;
+    }
+
+    // Put explicitly provided properties onto the event object
+    if (props != null) {
+      // more efficient to manually copy fields we use
+      this.originalEvent = props.originalEvent;
+      this.type = props.type != null ? props.type : this.type;
+      this.cy = props.cy;
+      this.target = props.target;
+      this.position = props.position;
+      this.renderedPosition = props.renderedPosition;
+      this.namespace = props.namespace;
+      this.layout = props.layout;
+    }
+
+    if (this.cy != null && this.position != null && this.renderedPosition == null) {
+      // create a rendered position based on the passed position
+      var pos = this.position;
+      var zoom = this.cy.zoom();
+      var pan = this.cy.pan();
+
+      this.renderedPosition = {
+        x: pos.x * zoom + pan.x,
+        y: pos.y * zoom + pan.y
+      };
+    }
+
+    // Create a timestamp if incoming event doesn't have one
+    this.timeStamp = src && src.timeStamp || Date.now();
+  },
+
+  preventDefault: function preventDefault() {
+    this.isDefaultPrevented = returnTrue;
+
+    var e = this.originalEvent;
+    if (!e) {
+      return;
+    }
+
+    // if preventDefault exists run it on the original event
+    if (e.preventDefault) {
+      e.preventDefault();
+    }
+  },
+
+  stopPropagation: function stopPropagation() {
+    this.isPropagationStopped = returnTrue;
+
+    var e = this.originalEvent;
+    if (!e) {
+      return;
+    }
+
+    // if stopPropagation exists run it on the original event
+    if (e.stopPropagation) {
+      e.stopPropagation();
+    }
+  },
+
+  stopImmediatePropagation: function stopImmediatePropagation() {
+    this.isImmediatePropagationStopped = returnTrue;
+    this.stopPropagation();
+  },
+
+  isDefaultPrevented: returnFalse,
+  isPropagationStopped: returnFalse,
+  isImmediatePropagationStopped: returnFalse
+};
+
+module.exports = Event;
+
+/***/ }),
+/* 21 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+/**
+ *  Elements are drawn in a specific order based on compound depth (low to high), the element type (nodes above edges),
+ *  and z-index (low to high).  These styles affect how this applies:
+ *
+ *  z-compound-depth: May be `bottom | orphan | auto | top`.  The first drawn is `bottom`, then `orphan` which is the
+ *      same depth as the root of the compound graph, followed by the default value `auto` which draws in order from
+ *      root to leaves of the compound graph.  The last drawn is `top`.
+ *  z-index-compare: May be `auto | manual`.  The default value is `auto` which always draws edges under nodes.
+ *      `manual` ignores this convention and draws based on the `z-index` value setting.
+ *  z-index: An integer value that affects the relative draw order of elements.  In general, an element with a higher
+ *      `z-index` will be drawn on top of an element with a lower `z-index`.
+ */
+var util = __webpack_require__(1);
+
+var zIndexSort = function zIndexSort(a, b) {
+  var cy = a.cy();
+  var hasCompoundNodes = cy.hasCompoundNodes();
+
+  function getDepth(ele) {
+    var style = ele.pstyle('z-compound-depth');
+    if (style.value === 'auto') {
+      return hasCompoundNodes ? ele.zDepth() : 0;
+    } else if (style.value === 'bottom') {
+      return -1;
+    } else if (style.value === 'top') {
+      return util.MAX_INT;
+    }
+    // 'orphan'
+    return 0;
+  }
+  var depthDiff = getDepth(a) - getDepth(b);
+  if (depthDiff !== 0) {
+    return depthDiff;
+  }
+
+  function getEleDepth(ele) {
+    var style = ele.pstyle('z-index-compare');
+    if (style.value === 'auto') {
+      return ele.isNode() ? 1 : 0;
+    }
+    // 'manual'
+    return 0;
+  }
+  var eleDiff = getEleDepth(a) - getEleDepth(b);
+  if (eleDiff !== 0) {
+    return eleDiff;
+  }
+
+  var zDiff = a.pstyle('z-index').value - b.pstyle('z-index').value;
+  if (zDiff !== 0) {
+    return zDiff;
+  }
+  // compare indices in the core (order added to graph w/ last on top)
+  return a.poolIndex() - b.poolIndex();
+};
+
+module.exports = zIndexSort;
+
+/***/ }),
+/* 22 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var is = __webpack_require__(0);
+var util = __webpack_require__(1);
+var Selector = __webpack_require__(6);
+
+var Style = function Style(cy) {
+
+  if (!(this instanceof Style)) {
+    return new Style(cy);
+  }
+
+  if (!is.core(cy)) {
+    util.error('A style must have a core reference');
+    return;
+  }
+
+  this._private = {
+    cy: cy,
+    coreStyle: {}
+  };
+
+  this.length = 0;
+
+  this.resetToDefault();
+};
+
+var styfn = Style.prototype;
+
+styfn.instanceString = function () {
+  return 'style';
+};
+
+// remove all contexts
+styfn.clear = function () {
+  for (var i = 0; i < this.length; i++) {
+    this[i] = undefined;
+  }
+  this.length = 0;
+
+  var _p = this._private;
+
+  _p.newStyle = true;
+
+  return this; // chaining
+};
+
+styfn.resetToDefault = function () {
+  this.clear();
+  this.addDefaultStylesheet();
+
+  return this;
+};
+
+// builds a style object for the 'core' selector
+styfn.core = function () {
+  return this._private.coreStyle;
+};
+
+// create a new context from the specified selector string and switch to that context
+styfn.selector = function (selectorStr) {
+  // 'core' is a special case and does not need a selector
+  var selector = selectorStr === 'core' ? null : new Selector(selectorStr);
+
+  var i = this.length++; // new context means new index
+  this[i] = {
+    selector: selector,
+    properties: [],
+    mappedProperties: [],
+    index: i
+  };
+
+  return this; // chaining
+};
+
+// add one or many css rules to the current context
+styfn.css = function () {
+  var self = this;
+  var args = arguments;
+
+  switch (args.length) {
+    case 1:
+      var map = args[0];
+
+      for (var i = 0; i < self.properties.length; i++) {
+        var prop = self.properties[i];
+        var mapVal = map[prop.name];
+
+        if (mapVal === undefined) {
+          mapVal = map[util.dash2camel(prop.name)];
+        }
+
+        if (mapVal !== undefined) {
+          this.cssRule(prop.name, mapVal);
+        }
+      }
+
+      break;
+
+    case 2:
+      this.cssRule(args[0], args[1]);
+      break;
+
+    default:
+      break; // do nothing if args are invalid
+  }
+
+  return this; // chaining
+};
+styfn.style = styfn.css;
+
+// add a single css rule to the current context
+styfn.cssRule = function (name, value) {
+  // name-value pair
+  var property = this.parse(name, value);
+
+  // add property to current context if valid
+  if (property) {
+    var i = this.length - 1;
+    this[i].properties.push(property);
+    this[i].properties[property.name] = property; // allow access by name as well
+
+    if (property.name.match(/pie-(\d+)-background-size/) && property.value) {
+      this._private.hasPie = true;
+    }
+
+    if (property.mapped) {
+      this[i].mappedProperties.push(property);
+    }
+
+    // add to core style if necessary
+    var currentSelectorIsCore = !this[i].selector;
+    if (currentSelectorIsCore) {
+      this._private.coreStyle[property.name] = property;
+    }
+  }
+
+  return this; // chaining
+};
+
+styfn.append = function (style) {
+  if (is.stylesheet(style)) {
+    style.appendToStyle(this);
+  } else if (is.array(style)) {
+    this.appendFromJson(style);
+  } else if (is.string(style)) {
+    this.appendFromString(style);
+  } // you probably wouldn't want to append a Style, since you'd duplicate the default parts
+
+  return this;
+};
+
+// static function
+Style.fromJson = function (cy, json) {
+  var style = new Style(cy);
+
+  style.fromJson(json);
+
+  return style;
+};
+
+Style.fromString = function (cy, string) {
+  return new Style(cy).fromString(string);
+};
+
+[__webpack_require__(89), __webpack_require__(90), __webpack_require__(91), __webpack_require__(92), __webpack_require__(93), __webpack_require__(94), __webpack_require__(14), __webpack_require__(95)].forEach(function (props) {
+  util.extend(styfn, props);
+});
+
+Style.types = styfn.types;
+Style.properties = styfn.properties;
+
+module.exports = Style;
+
+/***/ }),
 /* 23 */
 /***/ (function(module, exports, __webpack_require__) {
 
@@ -5319,13 +6593,13 @@ module.exports = {
 
 
 var is = __webpack_require__(0);
-var Core = __webpack_require__(15);
+var Core = __webpack_require__(16);
 var extension = __webpack_require__(97);
 var Stylesheet = __webpack_require__(139);
 
-var baseNodeShapes = __webpack_require__(13).nodeShapes;
+var baseNodeShapes = __webpack_require__(12).nodeShapes;
 var math = __webpack_require__(2);
-var styleProperties = __webpack_require__(22);
+var styleProperties = __webpack_require__(14);
 var sbgn = __webpack_require__(7);
 
 var cytoscape = function cytoscape(options) {
@@ -5850,7 +7124,7 @@ module.exports = {
 "use strict";
 
 
-var memoize = __webpack_require__(16);
+var memoize = __webpack_require__(17);
 var is = __webpack_require__(0);
 
 module.exports = {
@@ -8943,7 +10217,7 @@ module.exports = elesfn;
 
 var util = __webpack_require__(1);
 var exprs = __webpack_require__(54);
-var newQuery = __webpack_require__(12);
+var newQuery = __webpack_require__(13);
 
 // of all the expressions, find the first match in the remaining text
 var consumeExpr = function consumeExpr(remaining) {
@@ -9082,12 +10356,12 @@ module.exports = { parse: parse };
 
 var _slicedToArray = function () { function sliceIterator(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"]) _i["return"](); } finally { if (_d) throw _e; } } return _arr; } return function (arr, i) { if (Array.isArray(arr)) { return arr; } else if (Symbol.iterator in Object(arr)) { return sliceIterator(arr, i); } else { throw new TypeError("Invalid attempt to destructure non-iterable instance"); } }; }();
 
-var _require = __webpack_require__(18),
+var _require = __webpack_require__(19),
     stateSelectorRegex = _require.stateSelectorRegex;
 
 var tokens = __webpack_require__(55);
 var util = __webpack_require__(1);
-var newQuery = __webpack_require__(12);
+var newQuery = __webpack_require__(13);
 
 // when a token like a variable has escaped meta characters, we need to clean the backslashes out
 // so that values get compared properly in Selector.filter()
@@ -9385,7 +10659,7 @@ module.exports = tokens;
 "use strict";
 
 
-var _require = __webpack_require__(18),
+var _require = __webpack_require__(19),
     stateSelectorMatches = _require.stateSelectorMatches;
 
 var is = __webpack_require__(0);
@@ -10452,7 +11726,7 @@ module.exports = elesfn;
 var is = __webpack_require__(0);
 var util = __webpack_require__(1);
 var math = __webpack_require__(2);
-var baseNodeShapes = __webpack_require__(13).nodeShapes;
+var baseNodeShapes = __webpack_require__(12).nodeShapes;
 var sbgn = __webpack_require__(7);
 var fn = void 0,
     elesfn = void 0;
@@ -11484,7 +12758,7 @@ module.exports = {
 "use strict";
 
 
-var Emitter = __webpack_require__(14);
+var Emitter = __webpack_require__(15);
 var define = __webpack_require__(4);
 var is = __webpack_require__(0);
 var util = __webpack_require__(1);
@@ -12052,7 +13326,7 @@ module.exports = elesfn;
 
 
 var is = __webpack_require__(0);
-var zIndexSort = __webpack_require__(20);
+var zIndexSort = __webpack_require__(21);
 var util = __webpack_require__(1);
 
 var elesfn = {
@@ -13487,7 +14761,7 @@ module.exports = elesfn;
 var is = __webpack_require__(0);
 var util = __webpack_require__(1);
 var Collection = __webpack_require__(8);
-var Element = __webpack_require__(17);
+var Element = __webpack_require__(18);
 
 var corefn = {
   add: function add(opts) {
@@ -14447,7 +15721,7 @@ module.exports = startAnimation;
 "use strict";
 
 
-var Emitter = __webpack_require__(14);
+var Emitter = __webpack_require__(15);
 var define = __webpack_require__(4);
 var is = __webpack_require__(0);
 var util = __webpack_require__(1);
@@ -14934,7 +16208,7 @@ module.exports = corefn;
 
 
 var is = __webpack_require__(0);
-var Style = __webpack_require__(21);
+var Style = __webpack_require__(22);
 
 var corefn = {
 
@@ -17312,10 +18586,10 @@ module.exports = corefn;
 var util = __webpack_require__(1);
 var define = __webpack_require__(4);
 var Collection = __webpack_require__(8);
-var Core = __webpack_require__(15);
+var Core = __webpack_require__(16);
 var incExts = __webpack_require__(98);
 var is = __webpack_require__(0);
-var Emitter = __webpack_require__(14);
+var Emitter = __webpack_require__(15);
 
 // registered extensions to cytoscape, indexed by name
 var extensions = {};
@@ -20484,7 +21758,7 @@ BRp.destroy = function () {
   }
 };
 
-[__webpack_require__(111), __webpack_require__(112), __webpack_require__(122), __webpack_require__(123), __webpack_require__(13), __webpack_require__(124)].forEach(function (props) {
+[__webpack_require__(111), __webpack_require__(112), __webpack_require__(122), __webpack_require__(123), __webpack_require__(12), __webpack_require__(124)].forEach(function (props) {
   util.extend(BRp, props);
 });
 
@@ -23076,7 +24350,7 @@ module.exports = BRp;
 "use strict";
 
 
-var zIndexSort = __webpack_require__(20);
+var zIndexSort = __webpack_require__(21);
 
 var BRp = {};
 
@@ -23198,7 +24472,7 @@ module.exports = BRp;
 var is = __webpack_require__(0);
 var util = __webpack_require__(1);
 var math = __webpack_require__(2);
-var Event = __webpack_require__(19);
+var Event = __webpack_require__(20);
 
 var BRp = {};
 
@@ -29208,7 +30482,7 @@ module.exports = CRp;
 
 var is = __webpack_require__(0);
 var util = __webpack_require__(1);
-var Style = __webpack_require__(21);
+var Style = __webpack_require__(22);
 
 // a dummy stylesheet object that doesn't need a reference to the core
 // (useful for init)
@@ -29311,7 +30585,7 @@ module.exports = Stylesheet;
 "use strict";
 
 
-module.exports = "snapshot-543f0ace17-1658923577349";
+module.exports = "snapshot-39bfb20fcc-1717328881875";
 
 /***/ })
 /******/ ]);
