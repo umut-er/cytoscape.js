@@ -15,7 +15,7 @@
 * can be found in the file that list the changes done in ivis cytoscape fork.
 */
 
-var cyMath = math = require('./math.js');
+var math = require('./math.js');
 var cyBaseNodeShapes = require('./extensions/renderer/base/node-shapes').nodeShapes;
 var cyStyleProperties = require('./style/properties');
 
@@ -25,7 +25,7 @@ var cyStyleProperties = require('./style/properties');
 
 var sbgn = {};
 
-drawBorder = function ({ context, node, borderWidth, borderColor, borderStyle, borderOpacity }) {
+sbgn.drawBorder = function ({ context, node, borderWidth, borderColor, borderStyle, borderOpacity }) {
 
   borderWidth = borderWidth || (node && parseFloat(node.css('border-width')));
 
@@ -91,11 +91,11 @@ drawBorder = function ({ context, node, borderWidth, borderColor, borderStyle, b
   }
 };
 
-drawRoundRectanglePath = function (context, x, y, width, height, radius) {
+sbgn.drawRoundRectanglePath = function (context, x, y, width, height, radius) {
 
   var halfWidth = width / 2;
   var halfHeight = height / 2;
-  var cornerRadius = radius || cyMath.getRoundRectangleRadius(width, height);
+  var cornerRadius = radius || math.getRoundRectangleRadius(width, height);
 
   if (context.beginPath) { context.beginPath(); }
 
@@ -116,7 +116,7 @@ drawRoundRectanglePath = function (context, x, y, width, height, radius) {
   context.closePath();
 };
 
-drawPolygonPath = function (context, x, y, width, height, points) {
+sbgn.drawPolygonPath = function (context, x, y, width, height, points) {
 
   var halfW = width / 2;
   var halfH = height / 2;
@@ -132,7 +132,7 @@ drawPolygonPath = function (context, x, y, width, height, points) {
   context.closePath();
 };
 
-sbgnShapes = {
+sbgn.sbgnShapes = {
   'source and sink': true,
   'nucleic acid feature': true,
   'complex': true,
@@ -142,7 +142,7 @@ sbgnShapes = {
   'compartment': true
 };
 
-totallyOverridenNodeShapes = {
+sbgn.totallyOverridenNodeShapes = {
   'macromolecule': true,
   'nucleic acid feature': true,
   'simple chemical': true,
@@ -151,7 +151,7 @@ totallyOverridenNodeShapes = {
   'compartment': true
 };
 
-canHaveInfoBoxShapes = {
+sbgn.canHaveInfoBoxShapes = {
   'simple chemical': true,
   'macromolecule': true,
   'nucleic acid feature': true,
@@ -160,7 +160,7 @@ canHaveInfoBoxShapes = {
   'compartment': true
 };
 
-canBeMultimerShapes = {
+sbgn.canBeMultimerShapes = {
   'macromolecule': true,
   'complex': true,
   'nucleic acid feature': true,
@@ -219,14 +219,14 @@ sbgn.drawInfoBox = function (context, x, y, width, height, shapeName) {
 sbgn.nucleicAcidCheckPoint = function (x, y, padding, width, height, centerX, centerY, points, cornerRadius) {
 
   //check rectangle at top
-  if (cyMath.pointInsidePolygon(x, y, points,
+  if (math.pointInsidePolygon(x, y, points,
     centerX, centerY - cornerRadius / 2, width, height - cornerRadius / 3, [0, -1],
     padding)) {
     return true;
   }
 
   //check rectangle at bottom
-  if (cyMath.pointInsidePolygon(x, y, points,
+  if (math.pointInsidePolygon(x, y, points,
     centerX, centerY + height / 2 - cornerRadius / 2, width - 2 * cornerRadius, cornerRadius, [0, -1],
     padding)) {
     return true;
@@ -388,7 +388,7 @@ sbgn.drawBottomRoundRectangle = function (context, x, y, width, height) {
 // because it actually draws a nucleic acid feature in a different way.
 sbgn.drawNucAcidFeature2 = function (context, centerX, centerY,
   width, height, cornerRadius) {
-  cornerRadius = cornerRadius || cyMath.getRoundRectangleRadius(width, height);
+  cornerRadius = cornerRadius || math.getRoundRectangleRadius(width, height);
   var halfWidth = width / 2;
   var halfHeight = height / 2;
   var left = centerX - halfWidth, right = centerX + halfWidth;
@@ -649,7 +649,7 @@ sbgn.drawComplex = function (context, x, y, width, height, cornerLength) {
 };
 
 sbgn.drawCrossLine = function (context, x, y, width, height) {
-  var points = cyMath.generateUnitNgonPoints(4, 0);
+  var points = math.generateUnitNgonPoints(4, 0);
 
   context.beginPath();
   var scaleX = width * Math.sqrt(2) / 2, scaleY = height * Math.sqrt(2) / 2;
@@ -672,11 +672,11 @@ sbgn.drawRoundRectangle = function (context, x, y, width, height) {
 };
 
 sbgn.generateNucleicAcidPoints = function () {
-  return cyMath.generateUnitNgonPointsFitToSquare(4, 0);
+  return math.generateUnitNgonPointsFitToSquare(4, 0);
 };
 
 sbgn.generateBiologicalActivityPoints = function () {
-  return cyMath.generateUnitNgonPointsFitToSquare(4, 0);
+  return math.generateUnitNgonPointsFitToSquare(4, 0);
 };
 
 sbgn.generateCompartmentPoints = function () {
@@ -708,12 +708,12 @@ sbgn.plainIntersectLine = {
   "macromolecule": function (centerX, centerY, width, height, x, y, padding) {
     return sbgn.roundRectangleIntersectLine(x, y, centerX, centerY, centerX, centerY,
       width, height,
-      cyMath.getRoundRectangleRadius(width, height), padding
+      math.getRoundRectangleRadius(width, height), padding
     );
   },
   "complex": function (centerX, centerY, width, height, x, y, padding) {
     var points = sbgn.generateComplexShapePoints(sbgn.getDefaultComplexCornerLength(), width, height);
-    return cyMath.polygonIntersectLine(
+    return math.polygonIntersectLine(
       x, y, points, centerX, centerY, width / 2, height / 2, padding
     );
   },
@@ -725,7 +725,7 @@ sbgn.plainIntersectLine = {
   },
   "biological activity": function (centerX, centerY, width, height, x, y, padding) {
     var points = sbgn.generateBiologicalActivityPoints();
-    return cyMath.polygonIntersectLine(
+    return math.polygonIntersectLine(
       x, y, points, centerX, centerY, width / 2, height / 2, padding
     );
   },
@@ -733,7 +733,7 @@ sbgn.plainIntersectLine = {
     return cyBaseNodeShapes["barrel"].intersectLine(centerX, centerY, width, height, x, y, padding);
   },
   "oldCompartment": function (centerX, centerY, width, height, x, y, padding) {
-    return cyMath.roundRectangleIntersectLine(
+    return math.roundRectangleIntersectLine(
       x, y, centerX, centerY, width, height, padding
     );
   }
@@ -742,7 +742,7 @@ sbgn.plainIntersectLine = {
 sbgn.plainCheckPoint = {
   "simple chemical": function (x, y, padding, width, height, centerX, centerY) {
 
-    var points = cyMath.generateUnitNgonPointsFitToSquare(4, 0);
+    var points = math.generateUnitNgonPointsFitToSquare(4, 0);
     var halfWidth = width / 2;
     var halfHeight = height / 2;
     //var cornerRadius = math.getRoundRectangleRadius(width, height);
@@ -751,19 +751,19 @@ sbgn.plainCheckPoint = {
     var diam = cornerRadius * 2;
 
     // Check hBox
-    if (cyMath.pointInsidePolygon(x, y, points,
+    if (math.pointInsidePolygon(x, y, points,
       centerX, centerY, width, height - diam, [0, -1], padding)) {
       return true;
     }
 
     // Check vBox
-    if (cyMath.pointInsidePolygon(x, y, points,
+    if (math.pointInsidePolygon(x, y, points,
       centerX, centerY, width - diam, height, [0, -1], padding)) {
       return true;
     }
 
     // Check top left quarter circle
-    if (cyMath.checkInEllipse(x, y,
+    if (math.checkInEllipse(x, y,
       diam, diam,
       centerX - width / 2 + cornerRadius,
       centerY - height / 2 + cornerRadius,
@@ -773,7 +773,7 @@ sbgn.plainCheckPoint = {
     }
 
     // Check top right quarter circle
-    if (cyMath.checkInEllipse(x, y,
+    if (math.checkInEllipse(x, y,
       diam, diam,
       centerX + width / 2 - cornerRadius,
       centerY - height / 2 + cornerRadius,
@@ -783,7 +783,7 @@ sbgn.plainCheckPoint = {
     }
 
     // Check bottom right quarter circle
-    if (cyMath.checkInEllipse(x, y,
+    if (math.checkInEllipse(x, y,
       diam, diam,
       centerX + width / 2 - cornerRadius,
       centerY + height / 2 - cornerRadius,
@@ -793,7 +793,7 @@ sbgn.plainCheckPoint = {
     }
 
     // Check bottom left quarter circle
-    if (cyMath.checkInEllipse(x, y,
+    if (math.checkInEllipse(x, y,
       diam, diam,
       centerX - width / 2 + cornerRadius,
       centerY + height / 2 - cornerRadius,
@@ -809,7 +809,7 @@ sbgn.plainCheckPoint = {
   },
   "complex": function (x, y, padding, width, height, centerX, centerY) {
     var points = sbgn.generateComplexShapePoints(sbgn.getDefaultComplexCornerLength(), width, height);
-    return cyMath.pointInsidePolygon(
+    return math.pointInsidePolygon(
       x, y, points, centerX, centerY, width, height, [0, -1], padding);
   },
   "nucleic acid feature": function (x, y, padding, width, height, centerX, centerY) {
@@ -860,7 +860,7 @@ sbgn.cloneMarker = {
       var oldGlobalAlpha = context.globalAlpha;
       context.globalAlpha = opacity;
 
-      var recPoints = cyMath.generateUnitNgonPointsFitToSquare(4, 0);
+      var recPoints = math.generateUnitNgonPointsFitToSquare(4, 0);
       var cloneX = centerX;
       var cloneY = centerY + 3 / 4 * cornerRadius;
       var cloneWidth = width - 2 * cornerRadius;
@@ -885,7 +885,7 @@ sbgn.cloneMarker = {
       var oldGlobalAlpha = context.globalAlpha;
       context.globalAlpha = opacity;
 
-      var cornerRadius = cyMath.getRoundRectangleRadius(width, height);
+      var cornerRadius = math.getRoundRectangleRadius(width, height);
 
       sbgn.drawNucAcidFeature2(context, cloneX, cloneY,
         cloneWidth, cloneHeight, cornerRadius);
@@ -938,7 +938,7 @@ sbgn.closestIntersectionPoint = function (point, intersections) {
 
   for (var i = 0; i < intersections.length; i = i + 2) {
     var checkPoint = [intersections[i], intersections[i + 1]];
-    var distance = cyMath.calculateDistance(point, checkPoint);
+    var distance = math.calculateDistance(point, checkPoint);
 
     if (distance < minDistance) {
       minDistance = distance;
@@ -968,7 +968,7 @@ sbgn.nucleicAcidIntersectionLine = function (x, y, nodeX, nodeY, width, height, 
     var topEndX = nodeX + halfWidth + padding;
     var topEndY = topStartY;
 
-    straightLineIntersections = cyMath.finiteLinesIntersect(
+    straightLineIntersections = math.finiteLinesIntersect(
       x, y, nodeX, nodeY, topStartX, topStartY, topEndX, topEndY, false);
 
     if (straightLineIntersections.length > 0) {
@@ -983,7 +983,7 @@ sbgn.nucleicAcidIntersectionLine = function (x, y, nodeX, nodeY, width, height, 
     var rightEndX = rightStartX;
     var rightEndY = nodeY + halfHeight - cornerRadius + padding;
 
-    straightLineIntersections = cyMath.finiteLinesIntersect(
+    straightLineIntersections = math.finiteLinesIntersect(
       x, y, nodeX, nodeY, rightStartX, rightStartY, rightEndX, rightEndY, false);
 
     if (straightLineIntersections.length > 0) {
@@ -998,7 +998,7 @@ sbgn.nucleicAcidIntersectionLine = function (x, y, nodeX, nodeY, width, height, 
     var bottomEndX = nodeX + halfWidth - cornerRadius + padding;
     var bottomEndY = bottomStartY;
 
-    straightLineIntersections = cyMath.finiteLinesIntersect(
+    straightLineIntersections = math.finiteLinesIntersect(
       x, y, nodeX, nodeY, bottomStartX, bottomStartY, bottomEndX, bottomEndY, false);
 
     if (straightLineIntersections.length > 0) {
@@ -1013,7 +1013,7 @@ sbgn.nucleicAcidIntersectionLine = function (x, y, nodeX, nodeY, width, height, 
     var leftEndX = leftStartX;
     var leftEndY = nodeY + halfHeight - cornerRadius + padding;
 
-    straightLineIntersections = cyMath.finiteLinesIntersect(
+    straightLineIntersections = math.finiteLinesIntersect(
       x, y, nodeX, nodeY, leftStartX, leftStartY, leftEndX, leftEndY, false);
 
     if (straightLineIntersections.length > 0) {
@@ -1029,7 +1029,7 @@ sbgn.nucleicAcidIntersectionLine = function (x, y, nodeX, nodeY, width, height, 
   {
     var bottomRightCenterX = nodeX + halfWidth - cornerRadius;
     var bottomRightCenterY = nodeY + halfHeight - cornerRadius
-    arcIntersections = cyMath.intersectLineCircle(
+    arcIntersections = math.intersectLineCircle(
       x, y, nodeX, nodeY,
       bottomRightCenterX, bottomRightCenterY, cornerRadius + padding);
 
@@ -1045,7 +1045,7 @@ sbgn.nucleicAcidIntersectionLine = function (x, y, nodeX, nodeY, width, height, 
   {
     var bottomLeftCenterX = nodeX - halfWidth + cornerRadius;
     var bottomLeftCenterY = nodeY + halfHeight - cornerRadius
-    arcIntersections = cyMath.intersectLineCircle(
+    arcIntersections = math.intersectLineCircle(
       x, y, nodeX, nodeY,
       bottomLeftCenterX, bottomLeftCenterY, cornerRadius + padding);
 
@@ -1076,7 +1076,7 @@ sbgn.perturbingAgentIntersectLine = function (
     var topEndX = nodeX + halfWidth + padding;
     var topEndY = topStartY;
 
-    var intersection = cyMath.finiteLinesIntersect(
+    var intersection = math.finiteLinesIntersect(
       x1, y1, x2, y2, topStartX, topStartY, topEndX, topEndY, false);
 
     if (intersection.length > 0) {
@@ -1091,7 +1091,7 @@ sbgn.perturbingAgentIntersectLine = function (
     var rightEndX = rightStartX - halfWidth / 2;
     var rightEndY = nodeY + padding;
 
-    var intersection = cyMath.finiteLinesIntersect(
+    var intersection = math.finiteLinesIntersect(
       x1, y1, x2, y2, rightStartX, rightStartY, rightEndX, rightEndY, false);
 
     if (intersection.length > 0) {
@@ -1106,7 +1106,7 @@ sbgn.perturbingAgentIntersectLine = function (
     var leftEndX = leftStartX + halfWidth / 2;
     var leftEndY = nodeY + padding;
 
-    var intersection = cyMath.finiteLinesIntersect(
+    var intersection = math.finiteLinesIntersect(
       x1, y1, x2, y2, leftStartX, leftStartY, leftEndX, leftEndY, false);
 
     if (intersection.length > 0) {
@@ -1133,7 +1133,7 @@ sbgn.roundRectangleIntersectLine = function (
     var topEndX = nodeX + halfWidth - cornerRadius + padding;
     var topEndY = topStartY;
 
-    var intersection = cyMath.finiteLinesIntersect(
+    var intersection = math.finiteLinesIntersect(
       x1, y1, x2, y2, topStartX, topStartY, topEndX, topEndY, false);
 
     if (intersection.length > 0) {
@@ -1148,7 +1148,7 @@ sbgn.roundRectangleIntersectLine = function (
     var rightEndX = rightStartX;
     var rightEndY = nodeY + halfHeight - cornerRadius + padding;
 
-    var intersection = cyMath.finiteLinesIntersect(
+    var intersection = math.finiteLinesIntersect(
       x1, y1, x2, y2, rightStartX, rightStartY, rightEndX, rightEndY, false);
 
     if (intersection.length > 0) {
@@ -1163,7 +1163,7 @@ sbgn.roundRectangleIntersectLine = function (
     var bottomEndX = nodeX + halfWidth - cornerRadius + padding;
     var bottomEndY = bottomStartY;
 
-    var intersection = cyMath.finiteLinesIntersect(
+    var intersection = math.finiteLinesIntersect(
       x1, y1, x2, y2, bottomStartX, bottomStartY, bottomEndX, bottomEndY, false);
 
     if (intersection.length > 0) {
@@ -1178,7 +1178,7 @@ sbgn.roundRectangleIntersectLine = function (
     var leftEndX = leftStartX;
     var leftEndY = nodeY + halfHeight - cornerRadius + padding;
 
-    var intersection = cyMath.finiteLinesIntersect(
+    var intersection = math.finiteLinesIntersect(
       x1, y1, x2, y2, leftStartX, leftStartY, leftEndX, leftEndY, false);
 
     if (intersection.length > 0) {
@@ -1193,7 +1193,7 @@ sbgn.roundRectangleIntersectLine = function (
   {
     var topLeftCenterX = nodeX - halfWidth + cornerRadius;
     var topLeftCenterY = nodeY - halfHeight + cornerRadius
-    arcIntersections = cyMath.intersectLineCircle(
+    arcIntersections = math.intersectLineCircle(
       x1, y1, x2, y2,
       topLeftCenterX, topLeftCenterY, cornerRadius + padding);
 
@@ -1209,7 +1209,7 @@ sbgn.roundRectangleIntersectLine = function (
   {
     var topRightCenterX = nodeX + halfWidth - cornerRadius;
     var topRightCenterY = nodeY - halfHeight + cornerRadius
-    arcIntersections = cyMath.intersectLineCircle(
+    arcIntersections = math.intersectLineCircle(
       x1, y1, x2, y2,
       topRightCenterX, topRightCenterY, cornerRadius + padding);
 
@@ -1225,7 +1225,7 @@ sbgn.roundRectangleIntersectLine = function (
   {
     var bottomRightCenterX = nodeX + halfWidth - cornerRadius;
     var bottomRightCenterY = nodeY + halfHeight - cornerRadius
-    arcIntersections = cyMath.intersectLineCircle(
+    arcIntersections = math.intersectLineCircle(
       x1, y1, x2, y2,
       bottomRightCenterX, bottomRightCenterY, cornerRadius + padding);
 
@@ -1241,7 +1241,7 @@ sbgn.roundRectangleIntersectLine = function (
   {
     var bottomLeftCenterX = nodeX - halfWidth + cornerRadius;
     var bottomLeftCenterY = nodeY + halfHeight - cornerRadius
-    arcIntersections = cyMath.intersectLineCircle(
+    arcIntersections = math.intersectLineCircle(
       x1, y1, x2, y2,
       bottomLeftCenterX, bottomLeftCenterY, cornerRadius + padding);
 
@@ -1331,7 +1331,7 @@ sbgn.intersectLineEllipse = function (
 //           coord.x, coord.y, infoBoxWidth, infoBoxHeight, padding);
 //       }
 //       else if (node.data("class") == "BA simple chemical") {
-//         currIntersections = cyMath.intersectLineCircle(
+//         currIntersections = math.intersectLineCircle(
 //           x, y,
 //           centerX, centerY,
 //           coord.x,
