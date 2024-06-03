@@ -431,7 +431,7 @@ util.setPrefixedProperty = function (obj, propName, prefix, value) {
   obj[propName] = value;
 };
 
-[__webpack_require__(25), __webpack_require__(26), { memoize: __webpack_require__(17) }, __webpack_require__(27), __webpack_require__(28), __webpack_require__(29), __webpack_require__(31)].forEach(function (req) {
+[__webpack_require__(25), __webpack_require__(26), { memoize: __webpack_require__(16) }, __webpack_require__(27), __webpack_require__(28), __webpack_require__(29), __webpack_require__(31)].forEach(function (req) {
   util.extend(util, req);
 });
 
@@ -1784,7 +1784,7 @@ module.exports = typeof Promise !== 'undefined' ? Promise : api; // eslint-disab
 
 var is = __webpack_require__(0);
 var util = __webpack_require__(1);
-var newQuery = __webpack_require__(13);
+var newQuery = __webpack_require__(12);
 
 var Selector = function Selector(selector) {
   var self = this;
@@ -1989,1277 +1989,8 @@ module.exports = Selector;
 
 // sbgn shapes not supported by cytoscape.js this object will be exposed in cytoscape.js
 // and will be filled in sbgnviz.js
-
-// TODO: consider filling this object here and remove related things from sbgnviz
-// I agree it makes more sense like this. This way you can write tests here. - Umut E
-
-// This is a comment from sbgnviz.js. I am leaving it as is. - Umut E
-/*
-* Taken from cytoscape.js and modified so that it can be utilized from sbgnviz
-* in a flexable way. It is needed because the sbgnviz shapes would need to stroke
-* border more than once as they would have infoboxes, multimers etc.
-* Extends the style properties of node with the given ones then strokes the border.
-* Would needed to be slightly updated during cytoscape upgrades if related function in
-* Cytoscape.js is updated. Information about where is the related function is located
-* can be found in the file that list the changes done in ivis cytoscape fork.
-*/
-
-var cyMath = math = __webpack_require__(2);
-var cyBaseNodeShapes = __webpack_require__(12).nodeShapes;
-var cyStyleProperties = __webpack_require__(14);
-
-/*
- * Render sbgn specific shapes which are not supported by cytoscape.js core
- */
-
+// TODO consider filling this object here and remove related things from sbgnviz
 var sbgn = {};
-
-drawBorder = function drawBorder(_ref) {
-  var context = _ref.context,
-      node = _ref.node,
-      borderWidth = _ref.borderWidth,
-      borderColor = _ref.borderColor,
-      borderStyle = _ref.borderStyle,
-      borderOpacity = _ref.borderOpacity;
-
-
-  borderWidth = borderWidth || node && parseFloat(node.css('border-width'));
-
-  if (borderWidth > 0) {
-    var parentOpacity = node && node.effectiveOpacity() || 1;
-
-    borderStyle = borderStyle || node && node.css('border-style');
-    borderColor = borderColor || node && node.css('border-color');
-    borderOpacity = (borderOpacity || node && node.css('border-opacity')) * parentOpacity;
-
-    var propsToRestore = ['lineWidth', 'lineCap', 'strokeStyle', 'globalAlpha'];
-    var initialProps = {};
-
-    propsToRestore.forEach(function (propName) {
-      initialProps[propName] = context[propName];
-    });
-
-    context.lineWidth = borderWidth;
-    context.lineCap = 'butt';
-    context.strokeStyle = borderColor;
-    context.globalAlpha = borderOpacity;
-
-    if (context.setLineDash) {
-      // for very outofdate browsers
-      switch (borderStyle) {
-        case 'dotted':
-          context.setLineDash([1, 1]);
-          break;
-
-        case 'dashed':
-          context.setLineDash([4, 2]);
-          break;
-
-        case 'solid':
-        case 'double':
-          context.setLineDash([]);
-          break;
-      }
-    }
-
-    context.stroke();
-
-    if (borderStyle === 'double') {
-      context.lineWidth = borderWidth / 3;
-
-      var gco = context.globalCompositeOperation;
-      context.globalCompositeOperation = 'destination-out';
-
-      context.stroke();
-
-      context.globalCompositeOperation = gco;
-    }
-
-    // reset in case we changed the border style
-    if (context.setLineDash) {
-      // for very outofdate browsers
-      context.setLineDash([]);
-    }
-
-    propsToRestore.forEach(function (propName) {
-      context[propName] = initialProps[propName];
-    });
-  }
-};
-
-drawRoundRectanglePath = function drawRoundRectanglePath(context, x, y, width, height, radius) {
-
-  var halfWidth = width / 2;
-  var halfHeight = height / 2;
-  var cornerRadius = radius || cyMath.getRoundRectangleRadius(width, height);
-
-  if (context.beginPath) {
-    context.beginPath();
-  }
-
-  // Start at top middle
-  context.moveTo(x, y - halfHeight);
-  // Arc from middle top to right side
-  context.arcTo(x + halfWidth, y - halfHeight, x + halfWidth, y, cornerRadius);
-  // Arc from right side to bottom
-  context.arcTo(x + halfWidth, y + halfHeight, x, y + halfHeight, cornerRadius);
-  // Arc from bottom to left side
-  context.arcTo(x - halfWidth, y + halfHeight, x - halfWidth, y, cornerRadius);
-  // Arc from left side to topBorder
-  context.arcTo(x - halfWidth, y - halfHeight, x, y - halfHeight, cornerRadius);
-  // Join line
-  context.lineTo(x, y - halfHeight);
-
-  context.closePath();
-};
-
-drawPolygonPath = function drawPolygonPath(context, x, y, width, height, points) {
-
-  var halfW = width / 2;
-  var halfH = height / 2;
-
-  if (context.beginPath) {
-    context.beginPath();
-  }
-
-  context.moveTo(x + halfW * points[0], y + halfH * points[1]);
-
-  for (var i = 1; i < points.length / 2; i++) {
-    context.lineTo(x + halfW * points[i * 2], y + halfH * points[i * 2 + 1]);
-  }
-
-  context.closePath();
-};
-
-sbgnShapes = {
-  'source and sink': true,
-  'nucleic acid feature': true,
-  'complex': true,
-  'macromolecule': true,
-  'simple chemical': true,
-  'biological activity': true,
-  'compartment': true
-};
-
-totallyOverridenNodeShapes = {
-  'macromolecule': true,
-  'nucleic acid feature': true,
-  'simple chemical': true,
-  'complex': true,
-  'biological activity': true,
-  'compartment': true
-};
-
-canHaveInfoBoxShapes = {
-  'simple chemical': true,
-  'macromolecule': true,
-  'nucleic acid feature': true,
-  'complex': true,
-  'biological activity': true,
-  'compartment': true
-};
-
-canBeMultimerShapes = {
-  'macromolecule': true,
-  'complex': true,
-  'nucleic acid feature': true,
-  'simple chemical': true
-};
-
-// var classes = require('../utilities/classes');
-
-sbgn.colors = {
-  clone: "#838383"
-};
-
-sbgn.getDefaultComplexCornerLength = function () {
-  return 24;
-};
-
-// sbgn.drawStateAndInfos = function (node, context, centerX, centerY) {
-//   var layouts = node.data('auxunitlayouts');
-
-//   for (var side in layouts) {
-//     var layout = layouts[side];
-//     classes.AuxUnitLayout.draw(layout, node.cy(), context);
-//   }
-//   context.beginPath();
-//   context.closePath();
-// };
-
-sbgn.drawInfoBox = function (context, x, y, width, height, shapeName) {
-  switch (shapeName) {
-    case 'roundrectangle':
-      cyBaseNodeShapes['roundrectangle'].draw(context, x, y, width, height);
-      break;
-    case 'bottomroundrectangle':
-      sbgn.drawBottomRoundRectangle(context, x, y, width, height);
-      break;
-    case 'ellipse':
-      cyBaseNodeShapes['ellipse'].draw(context, x, y, width, height);
-      break;
-    case 'complex':
-      sbgn.drawComplex(context, x, y, width, height, height / 2);
-      break;
-    case 'perturbing agent':
-      var points = sbgn.generatePerturbingAgentPoints();
-      drawPolygonPath(context, x, y, width, height, points);
-      break;
-    case 'rectangle':
-      cyBaseNodeShapes['rectangle'].draw(context, x, y, width, height);
-      break;
-    case 'stadium':
-      sbgn.drawRoundRectanglePath(context, x, y, width, height, Math.min(width / 2, height / 2, 15));
-      break;
-  }
-};
-
-sbgn.nucleicAcidCheckPoint = function (x, y, padding, width, height, centerX, centerY, points, cornerRadius) {
-
-  //check rectangle at top
-  if (cyMath.pointInsidePolygon(x, y, points, centerX, centerY - cornerRadius / 2, width, height - cornerRadius / 3, [0, -1], padding)) {
-    return true;
-  }
-
-  //check rectangle at bottom
-  if (cyMath.pointInsidePolygon(x, y, points, centerX, centerY + height / 2 - cornerRadius / 2, width - 2 * cornerRadius, cornerRadius, [0, -1], padding)) {
-    return true;
-  }
-
-  //check ellipses
-  var checkInEllipse = function checkInEllipse(x, y, centerX, centerY, width, height, padding) {
-    x -= centerX;
-    y -= centerY;
-
-    x /= width / 2 + padding;
-    y /= height / 2 + padding;
-
-    return Math.pow(x, 2) + Math.pow(y, 2) <= 1;
-  };
-
-  // Check bottom right quarter circle
-  if (checkInEllipse(x, y, centerX + width / 2 - cornerRadius, centerY + height / 2 - cornerRadius, cornerRadius * 2, cornerRadius * 2, padding)) {
-
-    return true;
-  }
-
-  // Check bottom left quarter circle
-  if (checkInEllipse(x, y, centerX - width / 2 + cornerRadius, centerY + height / 2 - cornerRadius, cornerRadius * 2, cornerRadius * 2, padding)) {
-
-    return true;
-  }
-
-  return false;
-};
-
-//we need to force opacity to 1 since we might have state and info boxes.
-//having opaque nodes which have state and info boxes gives unpleasent results.
-sbgn.forceOpacityToOne = function (node, context) {
-  var parentOpacity = node.effectiveOpacity();
-  if (parentOpacity === 0) {
-    return;
-  }
-
-  context.fillStyle = "rgba(" + node._private.style["background-color"].value[0] + "," + node._private.style["background-color"].value[1] + "," + node._private.style["background-color"].value[2] + "," + 1 * node.css('opacity') * parentOpacity + ")";
-};
-
-sbgn.drawSimpleChemicalPath = function (context, x, y, width, height) {
-
-  var halfWidth = width / 2;
-  var halfHeight = height / 2;
-  //var cornerRadius = math.getRoundRectangleRadius(width, height);
-  var cornerRadius = Math.min(halfWidth, halfHeight);
-
-  context.beginPath();
-
-  // Start at top middle
-  context.moveTo(x, y - halfHeight);
-  // Arc from middle top to right side
-  context.arcTo(x + halfWidth, y - halfHeight, x + halfWidth, y, cornerRadius);
-  // Arc from right side to bottom
-  context.arcTo(x + halfWidth, y + halfHeight, x, y + halfHeight, cornerRadius);
-  // Arc from bottom to left side
-  context.arcTo(x - halfWidth, y + halfHeight, x - halfWidth, y, cornerRadius);
-  // Arc from left side to topBorder
-  context.arcTo(x - halfWidth, y - halfHeight, x, y - halfHeight, cornerRadius);
-  // Join line
-  context.lineTo(x, y - halfHeight);
-
-  context.closePath();
-};
-
-sbgn.drawSimpleChemical = function (context, x, y, width, height) {
-  sbgn.drawSimpleChemicalPath(context, x, y, width, height);
-  context.fill();
-};
-
-function simpleChemicalLeftClone(context, centerX, centerY, width, height, cloneMarker, opacity) {
-  if (cloneMarker != null) {
-    var oldGlobalAlpha = context.globalAlpha;
-    context.globalAlpha = opacity;
-    var oldStyle = context.fillStyle;
-    context.fillStyle = sbgn.colors.clone;
-
-    context.beginPath();
-
-    var markerBeginX = centerX - width / 2 * Math.sin(Math.PI / 3);
-    var markerBeginY = centerY + height / 2 * Math.cos(Math.PI / 3);
-    var markerEndX = centerX;
-    var markerEndY = markerBeginY;
-
-    context.moveTo(markerBeginX, markerBeginY);
-    context.lineTo(markerEndX, markerEndY);
-    context.arc(centerX, centerY, width / 2, 3 * Math.PI / 6, 5 * Math.PI / 6);
-
-    context.closePath();
-
-    context.fill();
-    context.fillStyle = oldStyle;
-    context.globalAlpha = oldGlobalAlpha;
-  }
-};
-
-function simpleChemicalRightClone(context, centerX, centerY, width, height, cloneMarker, opacity) {
-  if (cloneMarker != null) {
-    var oldGlobalAlpha = context.globalAlpha;
-    context.globalAlpha = opacity;
-    var oldStyle = context.fillStyle;
-    context.fillStyle = sbgn.colors.clone;
-
-    context.beginPath();
-
-    var markerBeginX = centerX;
-    var markerBeginY = centerY + height / 2 * Math.cos(Math.PI / 3);
-    var markerEndX = centerX + width / 2 * Math.sin(Math.PI / 3);
-    var markerEndY = markerBeginY;
-
-    context.moveTo(markerBeginX, markerBeginY);
-    context.lineTo(markerEndX, markerEndY);
-    context.arc(centerX, centerY, width / 2, Math.PI / 6, 3 * Math.PI / 6);
-
-    context.closePath();
-
-    context.fill();
-    context.fillStyle = oldStyle;
-    context.globalAlpha = oldGlobalAlpha;
-  }
-};
-
-sbgn.drawEllipsePath = function (context, x, y, width, height) {
-  cyBaseNodeShapes['ellipse'].drawPath(context, x, y, width, height);
-};
-
-sbgn.drawBarrel = function (context, x, y, width, height) {
-  cyBaseNodeShapes['barrel'].draw(context, x, y, width, height);
-  context.fill();
-};
-
-sbgn.drawBottomRoundRectangle = function (context, x, y, width, height) {
-  cyBaseNodeShapes['bottomroundrectangle'].draw(context, x, y, width, height);
-  context.fill();
-};
-
-// The old draw implementation for nucleic acid feature
-// now only used for clone marker drawing of nucleic acid feature
-// and macromolecule shapes because 'bottomroundrectangle' function
-// of cytoscape.js did not fit well for this purpose.
-// Did not change the name yet directly as drawNucAcidFeatureClone etc.
-// because it actually draws a nucleic acid feature in a different way.
-sbgn.drawNucAcidFeature2 = function (context, centerX, centerY, width, height, cornerRadius) {
-  cornerRadius = cornerRadius || cyMath.getRoundRectangleRadius(width, height);
-  var halfWidth = width / 2;
-  var halfHeight = height / 2;
-  var left = centerX - halfWidth,
-      right = centerX + halfWidth;
-  var bottom = centerY - halfHeight,
-      top = centerY + halfHeight;
-  context.beginPath();
-
-  context.moveTo(left, bottom);
-  context.lineTo(right, bottom);
-  context.lineTo(right, centerY);
-  context.arcTo(right, top, centerX, top, cornerRadius);
-  context.arcTo(left, top, left, centerY, cornerRadius);
-  context.lineTo(left, bottom);
-
-  context.closePath();
-  context.fill();
-};
-
-/*
- * Code taken from https://jsperf.com/string-prototype-endswith
- * Direct implementation seems to work better.
- * Using this improves isMultimer() performance.
- * Makes it take 0.1 or 0.2% less time from the whole
- * loading process, down from ~0.4% initially.
- */
-function endsWith(str, pattern) {
-  for (var i = pattern.length, l = str.length; i--;) {
-    if (str.charAt(--l) != pattern.charAt(i)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-sbgn.isMultimer = function (node) {
-  var sbgnClass = node._private.data.class;
-  if (sbgnClass && endsWith(sbgnClass, "multimer")) return true;
-  return false;
-};
-
-//this function is created to have same corner length when
-//complex's width or height is changed
-sbgn.generateComplexShapePoints = function (cornerLength, width, height) {
-  //cp stands for corner proportion
-  var cpX = Math.min(cornerLength, 0.5 * width) / width;
-  var cpY = Math.min(cornerLength, 0.5 * height) / height;
-
-  var complexPoints = [-1 + cpX, -1, -1, -1 + cpY, -1, 1 - cpY, -1 + cpX, 1, 1 - cpX, 1, 1, 1 - cpY, 1, -1 + cpY, 1 - cpX, -1];
-
-  return complexPoints;
-};
-
-sbgn.generatePerturbingAgentPoints = function () {
-  return [-1, -1, -0.5, 0, -1, 1, 1, 1, 0.5, 0, 1, -1];
-};
-
-sbgn.getDefaultMultimerPadding = function () {
-  return 5;
-};
-
-// draw background image of nodes
-sbgn.drawImage = function (context, imgObj) {
-  if (imgObj) {
-    context.clip();
-    context.drawImage(imgObj.img, 0, 0, imgObj.imgW, imgObj.imgH, imgObj.x, imgObj.y, imgObj.w, imgObj.h);
-    context.restore();
-  }
-};
-
-cyStyleProperties.types.nodeShape.enums.push('source and sink', 'nucleic acid feature', 'complex', 'macromolecule', 'simple chemical', 'biological activity', 'compartment');
-
-sbgn.registerSbgnNodeShapes = function () {
-
-  function generateDrawFcn(_ref2) {
-    var plainDrawFcn = _ref2.plainDrawFcn,
-        extraDrawFcn = _ref2.extraDrawFcn,
-        canBeMultimer = _ref2.canBeMultimer,
-        cloneMarkerFcn = _ref2.cloneMarkerFcn,
-        canHaveInfoBox = _ref2.canHaveInfoBox,
-        multimerPadding = _ref2.multimerPadding;
-
-
-    return function (context, node, imgObj) {
-
-      var borderWidth = parseFloat(node.css('border-width'));
-      var width = node.outerWidth() - borderWidth;
-      var height = node.outerHeight() - borderWidth;
-      var centerX = node._private.position.x;
-      var centerY = node._private.position.y;
-      var bgOpacity = node.css('background-opacity');
-      var isCloned = cloneMarkerFcn != null && node._private.data.clonemarker;
-
-      if (canBeMultimer && sbgn.isMultimer(node)) {
-        //add multimer shape
-        plainDrawFcn(context, centerX + multimerPadding, centerY + multimerPadding, width, height);
-
-        sbgn.drawBorder({ context: context, node: node });
-
-        if (extraDrawFcn) {
-          extraDrawFcn(context, centerX + multimerPadding, centerY + multimerPadding, width, height);
-
-          sbgn.drawBorder({ context: context, node: node });
-        }
-
-        if (isCloned) {
-          cloneMarkerFcn(context, centerX + multimerPadding, centerY + multimerPadding, width - borderWidth, height - borderWidth, isCloned, true, bgOpacity);
-        }
-      }
-
-      plainDrawFcn(context, centerX, centerY, width, height);
-
-      sbgn.drawBorder({ context: context, node: node });
-      sbgn.drawImage(context, imgObj);
-
-      if (extraDrawFcn) {
-        extraDrawFcn(context, centerX, centerY, width, height);
-
-        sbgn.drawBorder({ context: context, node: node });
-      }
-
-      if (isCloned) {
-        cloneMarkerFcn(context, centerX, centerY, width - borderWidth, height - borderWidth, isCloned, false, bgOpacity);
-      }
-
-      if (canHaveInfoBox) {
-        var oldStyle = context.fillStyle;
-        sbgn.forceOpacityToOne(node, context);
-        sbgn.drawStateAndInfos(node, context, centerX, centerY);
-        context.fillStyle = oldStyle;
-      }
-    };
-  }
-
-  function generateIntersectLineFcn(_ref3) {
-    var plainIntersectLineFcn = _ref3.plainIntersectLineFcn,
-        canBeMultimer = _ref3.canBeMultimer,
-        cloneMarkerFcn = _ref3.cloneMarkerFcn,
-        canHaveInfoBox = _ref3.canHaveInfoBox,
-        multimerPadding = _ref3.multimerPadding;
-
-
-    return function (node, x, y) {
-      var borderWidth = parseFloat(node.css('border-width'));
-      var padding = borderWidth / 2;
-      var width = node.outerWidth() - borderWidth;
-      var height = node.outerHeight() - borderWidth;
-      var centerX = node._private.position.x;
-      var centerY = node._private.position.y;
-
-      var intersections = [];
-
-      if (canHaveInfoBox) {
-        var stateAndInfoIntersectLines = sbgn.intersectLineStateAndInfoBoxes(node, x, y);
-
-        intersections = intersections.concat(stateAndInfoIntersectLines);
-      }
-
-      var nodeIntersectLines = plainIntersectLineFcn(centerX, centerY, width, height, x, y, padding);
-
-      intersections = intersections.concat(nodeIntersectLines);
-
-      if (canBeMultimer && sbgn.isMultimer(node)) {
-        var multimerIntersectionLines = plainIntersectLineFcn(centerX + multimerPadding, centerY + multimerPadding, width, height, x, y, padding);
-
-        intersections = intersections.concat(multimerIntersectionLines);
-      }
-
-      return sbgn.closestIntersectionPoint([x, y], intersections);
-    };
-  }
-
-  function generateCheckPointFcn(_ref4) {
-    var plainCheckPointFcn = _ref4.plainCheckPointFcn,
-        canBeMultimer = _ref4.canBeMultimer,
-        cloneMarkerFcn = _ref4.cloneMarkerFcn,
-        canHaveInfoBox = _ref4.canHaveInfoBox,
-        multimerPadding = _ref4.multimerPadding;
-
-
-    return function (x, y, node, threshold) {
-
-      threshold = threshold || 0;
-      var borderWidth = parseFloat(node.css('border-width'));
-      var width = node.outerWidth() - borderWidth + 2 * threshold;
-      var height = node.outerHeight() - borderWidth + 2 * threshold;
-      var centerX = node._private.position.x;
-      var centerY = node._private.position.y;
-      var padding = borderWidth / 2;
-
-      var nodeCheck = function nodeCheck() {
-        return plainCheckPointFcn(x, y, padding, width, height, centerX, centerY);
-      };
-
-      var stateAndInfoCheck = function stateAndInfoCheck() {
-        return canHaveInfoBox && sbgn.checkPointStateAndInfoBoxes(x, y, node, threshold);
-      };
-
-      var multimerCheck = function multimerCheck() {
-        return canBeMultimer && sbgn.isMultimer(node) && plainCheckPointFcn(x, y, padding, width, height, centerX + multimerPadding, centerY + multimerPadding);
-      };
-
-      return nodeCheck() || stateAndInfoCheck() || multimerCheck();
-    };
-  }
-
-  var shapeNames = ["simple chemical", "macromolecule", "complex", "nucleic acid feature", "source and sink", "biological activity", "compartment", "oldCompartment"];
-
-  shapeNames.forEach(function (shapeName) {
-    var plainDrawFcn = sbgn.plainDraw[shapeName];
-    var plainIntersectLineFcn = sbgn.plainIntersectLine[shapeName];
-    var plainCheckPointFcn = sbgn.plainCheckPoint[shapeName];
-    var canBeMultimer = sbgn.canBeMultimerShapes[shapeName];
-    var cloneMarkerFcn = sbgn.cloneMarker[shapeName];
-    var canHaveInfoBox = sbgn.canHaveInfoBoxShapes[shapeName];
-    var multimerPadding = sbgn.getDefaultMultimerPadding();
-    var extraDrawFcn = sbgn.extraDraw[shapeName];
-
-    var draw = generateDrawFcn({
-      plainDrawFcn: plainDrawFcn, canBeMultimer: canBeMultimer, cloneMarkerFcn: cloneMarkerFcn,
-      canHaveInfoBox: canHaveInfoBox, multimerPadding: multimerPadding, extraDrawFcn: extraDrawFcn
-    });
-
-    var intersectLine = totallyOverridenNodeShapes[shapeName] ? generateIntersectLineFcn({
-      plainIntersectLineFcn: plainIntersectLineFcn, canBeMultimer: canBeMultimer, cloneMarkerFcn: cloneMarkerFcn,
-      canHaveInfoBox: canHaveInfoBox, multimerPadding: multimerPadding
-    }) : plainIntersectLineFcn;
-
-    var checkPoint = totallyOverridenNodeShapes[shapeName] ? generateCheckPointFcn({
-      plainCheckPointFcn: plainCheckPointFcn, canBeMultimer: canBeMultimer, cloneMarkerFcn: cloneMarkerFcn,
-      canHaveInfoBox: canHaveInfoBox, multimerPadding: multimerPadding
-    }) : plainCheckPointFcn;
-
-    var shape = { draw: draw, intersectLine: intersectLine, checkPoint: checkPoint, multimerPadding: multimerPadding };
-
-    cyBaseNodeShapes[shapeName] = shape;
-  });
-};
-
-sbgn.drawEllipse = function (context, x, y, width, height) {
-  //sbgn.drawEllipsePath(context, x, y, width, height);
-  //context.fill();
-  cyBaseNodeShapes['ellipse'].draw(context, x, y, width, height);
-};
-
-sbgn.drawComplex = function (context, x, y, width, height, cornerLength) {
-  cornerLength = cornerLength || sbgn.getDefaultComplexCornerLength();
-  var points = sbgn.generateComplexShapePoints(cornerLength, width, height);
-
-  drawPolygonPath(context, x, y, width, height, points);
-
-  context.fill();
-};
-
-sbgn.drawCrossLine = function (context, x, y, width, height) {
-  var points = cyMath.generateUnitNgonPoints(4, 0);
-
-  context.beginPath();
-  var scaleX = width * Math.sqrt(2) / 2,
-      scaleY = height * Math.sqrt(2) / 2;
-
-  context.moveTo(x + scaleX * points[2], y + scaleY * points[3]);
-  context.lineTo(x + scaleX * points[6], y + scaleY * points[7]);
-  context.closePath();
-};
-
-sbgn.drawBiologicalActivity = function (context, x, y, width, height) {
-  var points = sbgn.generateBiologicalActivityPoints();
-  drawPolygonPath(context, x, y, width, height, points);
-  context.fill();
-};
-
-sbgn.drawRoundRectangle = function (context, x, y, width, height) {
-  drawRoundRectanglePath(context, x, y, width, height);
-  context.fill();
-};
-
-sbgn.generateNucleicAcidPoints = function () {
-  return cyMath.generateUnitNgonPointsFitToSquare(4, 0);
-};
-
-sbgn.generateBiologicalActivityPoints = function () {
-  return cyMath.generateUnitNgonPointsFitToSquare(4, 0);
-};
-
-sbgn.generateCompartmentPoints = function () {
-  return math.generateUnitNgonPointsFitToSquare(4, 0);
-};
-
-sbgn.plainDraw = {
-  "simple chemical": sbgn.drawSimpleChemical,
-  "macromolecule": sbgn.drawRoundRectangle,
-  "complex": sbgn.drawComplex,
-  "nucleic acid feature": sbgn.drawBottomRoundRectangle,
-  "source and sink": sbgn.drawEllipse,
-  "biological activity": sbgn.drawBiologicalActivity,
-  "compartment": sbgn.drawBarrel,
-  "oldCompartment": sbgn.drawRoundRectangle
-};
-
-// To define an extra drawing for the node that is rendered at the very end,
-// even after the node background image is drawn.
-// E.g. cross lines of "source and sink" nodes.
-sbgn.extraDraw = {
-  "source and sink": sbgn.drawCrossLine
-};
-
-sbgn.plainIntersectLine = {
-  "simple chemical": function simpleChemical(centerX, centerY, width, height, x, y, padding) {
-    return cyBaseNodeShapes["ellipse"].intersectLine(centerX, centerY, width, height, x, y, padding);
-  },
-  "macromolecule": function macromolecule(centerX, centerY, width, height, x, y, padding) {
-    return sbgn.roundRectangleIntersectLine(x, y, centerX, centerY, centerX, centerY, width, height, cyMath.getRoundRectangleRadius(width, height), padding);
-  },
-  "complex": function complex(centerX, centerY, width, height, x, y, padding) {
-    var points = sbgn.generateComplexShapePoints(sbgn.getDefaultComplexCornerLength(), width, height);
-    return cyMath.polygonIntersectLine(x, y, points, centerX, centerY, width / 2, height / 2, padding);
-  },
-  "nucleic acid feature": function nucleicAcidFeature(centerX, centerY, width, height, x, y, padding) {
-    return cyBaseNodeShapes["bottomroundrectangle"].intersectLine(centerX, centerY, width, height, x, y, padding);
-  },
-  "source and sink": function sourceAndSink(centerX, centerY, width, height, x, y, padding) {
-    return cyBaseNodeShapes["ellipse"].intersectLine(centerX, centerY, width, height, x, y, padding);
-  },
-  "biological activity": function biologicalActivity(centerX, centerY, width, height, x, y, padding) {
-    var points = sbgn.generateBiologicalActivityPoints();
-    return cyMath.polygonIntersectLine(x, y, points, centerX, centerY, width / 2, height / 2, padding);
-  },
-  "compartment": function compartment(centerX, centerY, width, height, x, y, padding) {
-    return cyBaseNodeShapes["barrel"].intersectLine(centerX, centerY, width, height, x, y, padding);
-  },
-  "oldCompartment": function oldCompartment(centerX, centerY, width, height, x, y, padding) {
-    return cyMath.roundRectangleIntersectLine(x, y, centerX, centerY, width, height, padding);
-  }
-};
-
-sbgn.plainCheckPoint = {
-  "simple chemical": function simpleChemical(x, y, padding, width, height, centerX, centerY) {
-
-    var points = cyMath.generateUnitNgonPointsFitToSquare(4, 0);
-    var halfWidth = width / 2;
-    var halfHeight = height / 2;
-    //var cornerRadius = math.getRoundRectangleRadius(width, height);
-    var cornerRadius = Math.min(halfWidth, halfHeight);
-    //var cornerRadius = math.getRoundRectangleRadius( width, height );
-    var diam = cornerRadius * 2;
-
-    // Check hBox
-    if (cyMath.pointInsidePolygon(x, y, points, centerX, centerY, width, height - diam, [0, -1], padding)) {
-      return true;
-    }
-
-    // Check vBox
-    if (cyMath.pointInsidePolygon(x, y, points, centerX, centerY, width - diam, height, [0, -1], padding)) {
-      return true;
-    }
-
-    // Check top left quarter circle
-    if (cyMath.checkInEllipse(x, y, diam, diam, centerX - width / 2 + cornerRadius, centerY - height / 2 + cornerRadius, padding)) {
-
-      return true;
-    }
-
-    // Check top right quarter circle
-    if (cyMath.checkInEllipse(x, y, diam, diam, centerX + width / 2 - cornerRadius, centerY - height / 2 + cornerRadius, padding)) {
-
-      return true;
-    }
-
-    // Check bottom right quarter circle
-    if (cyMath.checkInEllipse(x, y, diam, diam, centerX + width / 2 - cornerRadius, centerY + height / 2 - cornerRadius, padding)) {
-
-      return true;
-    }
-
-    // Check bottom left quarter circle
-    if (cyMath.checkInEllipse(x, y, diam, diam, centerX - width / 2 + cornerRadius, centerY + height / 2 - cornerRadius, padding)) {
-
-      return true;
-    }
-    return false;
-    //return cyBaseNodeShapes["ellipse"].checkPoint( x, y, padding, width, height, centerX, centerY );
-  },
-  "macromolecule": function macromolecule(x, y, padding, width, height, centerX, centerY) {
-    return cyBaseNodeShapes["roundrectangle"].checkPoint(x, y, padding, width, height, centerX, centerY);
-  },
-  "complex": function complex(x, y, padding, width, height, centerX, centerY) {
-    var points = sbgn.generateComplexShapePoints(sbgn.getDefaultComplexCornerLength(), width, height);
-    return cyMath.pointInsidePolygon(x, y, points, centerX, centerY, width, height, [0, -1], padding);
-  },
-  "nucleic acid feature": function nucleicAcidFeature(x, y, padding, width, height, centerX, centerY) {
-    return cyBaseNodeShapes["bottomroundrectangle"].checkPoint(x, y, padding, width, height, centerX, centerY);
-  },
-  "source and sink": function sourceAndSink(x, y, padding, width, height, centerX, centerY) {
-    return cyBaseNodeShapes["ellipse"].checkPoint(x, y, padding, width, height, centerX, centerY);
-  },
-  "biological activity": function biologicalActivity(x, y, padding, width, height, centerX, centerY) {
-    return cyBaseNodeShapes["rectangle"].checkPoint(x, y, padding, width, height, centerX, centerY);
-  },
-  "compartment": function compartment(x, y, padding, width, height, centerX, centerY) {
-    return cyBaseNodeShapes["barrel"].checkPoint(x, y, padding, width, height, centerX, centerY);
-  },
-  "oldCompartment": function oldCompartment(x, y, padding, width, height, centerX, centerY) {
-    return cyBaseNodeShapes["roundrectangle"].checkPoint(x, y, padding, width, height, centerX, centerY);
-  }
-};
-
-sbgn.cloneMarker = {
-  "simple chemical": function simpleChemical(context, centerX, centerY, width, height, cloneMarker, isMultimer, opacity) {
-    if (cloneMarker != null) {
-      var cornerRadius = Math.min(width / 2, height / 2);
-
-      var firstCircleCenterX = centerX - width / 2 + cornerRadius;
-      var firstCircleCenterY = centerY;
-      var secondCircleCenterX = centerX + width / 2 - cornerRadius;
-      var secondCircleCenterY = centerY;
-      var bottomCircleCenterX = centerX;
-      var bottomCircleCenterY = centerY + height / 2 - cornerRadius;
-
-      if (width < height) {
-        simpleChemicalLeftClone(context, bottomCircleCenterX, bottomCircleCenterY, 2 * cornerRadius, 2 * cornerRadius, cloneMarker, opacity);
-        simpleChemicalRightClone(context, bottomCircleCenterX, bottomCircleCenterY, 2 * cornerRadius, 2 * cornerRadius, cloneMarker, opacity);
-      } else {
-        simpleChemicalLeftClone(context, firstCircleCenterX, firstCircleCenterY, 2 * cornerRadius, 2 * cornerRadius, cloneMarker, opacity);
-        simpleChemicalRightClone(context, secondCircleCenterX, secondCircleCenterY, 2 * cornerRadius, 2 * cornerRadius, cloneMarker, opacity);
-      }
-
-      var oldStyle = context.fillStyle;
-      context.fillStyle = sbgn.colors.clone;
-      var oldGlobalAlpha = context.globalAlpha;
-      context.globalAlpha = opacity;
-
-      var recPoints = cyMath.generateUnitNgonPointsFitToSquare(4, 0);
-      var cloneX = centerX;
-      var cloneY = centerY + 3 / 4 * cornerRadius;
-      var cloneWidth = width - 2 * cornerRadius;
-      var cloneHeight = cornerRadius / 2;
-
-      drawPolygonPath(context, cloneX, cloneY, cloneWidth, cloneHeight, recPoints);
-      context.fill();
-      context.fillStyle = oldStyle;
-      context.globalAlpha = oldGlobalAlpha;
-    }
-  },
-  "nucleic acid feature": function nucleicAcidFeature(context, centerX, centerY, width, height, cloneMarker, isMultimer, opacity) {
-    if (cloneMarker != null) {
-      var cloneWidth = width;
-      var cloneHeight = height / 4;
-      var cloneX = centerX;
-      var cloneY = centerY + 3 * height / 8;
-
-      var oldStyle = context.fillStyle;
-      context.fillStyle = sbgn.colors.clone;
-      var oldGlobalAlpha = context.globalAlpha;
-      context.globalAlpha = opacity;
-
-      var cornerRadius = cyMath.getRoundRectangleRadius(width, height);
-
-      sbgn.drawNucAcidFeature2(context, cloneX, cloneY, cloneWidth, cloneHeight, cornerRadius);
-
-      context.fillStyle = oldStyle;
-      context.globalAlpha = oldGlobalAlpha;
-    }
-  },
-  "macromolecule": function macromolecule(context, centerX, centerY, width, height, cloneMarker, isMultimer, opacity) {
-    sbgn.cloneMarker["nucleic acid feature"](context, centerX, centerY, width, height, cloneMarker, isMultimer, opacity);
-  },
-  "complex": function complex(context, centerX, centerY, width, height, cloneMarker, isMultimer, opacity) {
-    if (cloneMarker != null) {
-      var cornerLength = sbgn.getDefaultComplexCornerLength();
-      var cpX = width >= 50 ? cornerLength / width : cornerLength / 50;
-      var cpY = height >= 50 ? cornerLength / height : cornerLength / 50;
-      var cloneWidth = width;
-      var cloneHeight = height * cpY / 2;
-      var cloneX = centerX;
-      var cloneY = centerY + height / 2 - cloneHeight / 2;
-
-      var markerPoints = [-1, -1, 1, -1, 1 - cpX, 1, -1 + cpX, 1];
-
-      var oldStyle = context.fillStyle;
-      context.fillStyle = sbgn.colors.clone;
-      var oldGlobalAlpha = context.globalAlpha;
-      context.globalAlpha = opacity;
-
-      drawPolygonPath(context, cloneX, cloneY, cloneWidth, cloneHeight, markerPoints);
-      context.fill();
-
-      context.fillStyle = oldStyle;
-      context.globalAlpha = oldGlobalAlpha;
-    }
-  }
-};
-
-sbgn.closestIntersectionPoint = function (point, intersections) {
-  if (intersections.length <= 0) return [];
-
-  var closestIntersection = [];
-  var minDistance = Number.MAX_VALUE;
-
-  for (var i = 0; i < intersections.length; i = i + 2) {
-    var checkPoint = [intersections[i], intersections[i + 1]];
-    var distance = cyMath.calculateDistance(point, checkPoint);
-
-    if (distance < minDistance) {
-      minDistance = distance;
-      closestIntersection = checkPoint;
-    }
-  }
-
-  return closestIntersection;
-};
-
-sbgn.nucleicAcidIntersectionLine = function (x, y, nodeX, nodeY, width, height, cornerRadius, padding) {
-  // var nodeX = node._private.position.x;
-  // var nodeY = node._private.position.y;
-  // var width = node.width();
-  // var height = node.height();
-  // var padding = parseInt(node.css('border-width')) / 2;
-
-  var halfWidth = width / 2;
-  var halfHeight = height / 2;
-
-  var straightLineIntersections;
-
-  // Top segment, left to right
-  {
-    var topStartX = nodeX - halfWidth - padding;
-    var topStartY = nodeY - halfHeight - padding;
-    var topEndX = nodeX + halfWidth + padding;
-    var topEndY = topStartY;
-
-    straightLineIntersections = cyMath.finiteLinesIntersect(x, y, nodeX, nodeY, topStartX, topStartY, topEndX, topEndY, false);
-
-    if (straightLineIntersections.length > 0) {
-      return straightLineIntersections;
-    }
-  }
-
-  // Right segment, top to bottom
-  {
-    var rightStartX = nodeX + halfWidth + padding;
-    var rightStartY = nodeY - halfHeight - padding;
-    var rightEndX = rightStartX;
-    var rightEndY = nodeY + halfHeight - cornerRadius + padding;
-
-    straightLineIntersections = cyMath.finiteLinesIntersect(x, y, nodeX, nodeY, rightStartX, rightStartY, rightEndX, rightEndY, false);
-
-    if (straightLineIntersections.length > 0) {
-      return straightLineIntersections;
-    }
-  }
-
-  // Bottom segment, left to right
-  {
-    var bottomStartX = nodeX - halfWidth + cornerRadius - padding;
-    var bottomStartY = nodeY + halfHeight + padding;
-    var bottomEndX = nodeX + halfWidth - cornerRadius + padding;
-    var bottomEndY = bottomStartY;
-
-    straightLineIntersections = cyMath.finiteLinesIntersect(x, y, nodeX, nodeY, bottomStartX, bottomStartY, bottomEndX, bottomEndY, false);
-
-    if (straightLineIntersections.length > 0) {
-      return straightLineIntersections;
-    }
-  }
-
-  // Left segment, top to bottom
-  {
-    var leftStartX = nodeX - halfWidth - padding;
-    var leftStartY = nodeY - halfHeight - padding;
-    var leftEndX = leftStartX;
-    var leftEndY = nodeY + halfHeight - cornerRadius + padding;
-
-    straightLineIntersections = cyMath.finiteLinesIntersect(x, y, nodeX, nodeY, leftStartX, leftStartY, leftEndX, leftEndY, false);
-
-    if (straightLineIntersections.length > 0) {
-      return straightLineIntersections;
-    }
-  }
-
-  // Check intersections with arc segments, we have only two arcs for
-  //nucleic acid features
-  var arcIntersections;
-
-  // Bottom Right
-  {
-    var bottomRightCenterX = nodeX + halfWidth - cornerRadius;
-    var bottomRightCenterY = nodeY + halfHeight - cornerRadius;
-    arcIntersections = cyMath.intersectLineCircle(x, y, nodeX, nodeY, bottomRightCenterX, bottomRightCenterY, cornerRadius + padding);
-
-    // Ensure the intersection is on the desired quarter of the circle
-    if (arcIntersections.length > 0 && arcIntersections[0] >= bottomRightCenterX && arcIntersections[1] >= bottomRightCenterY) {
-      return [arcIntersections[0], arcIntersections[1]];
-    }
-  }
-
-  // Bottom Left
-  {
-    var bottomLeftCenterX = nodeX - halfWidth + cornerRadius;
-    var bottomLeftCenterY = nodeY + halfHeight - cornerRadius;
-    arcIntersections = cyMath.intersectLineCircle(x, y, nodeX, nodeY, bottomLeftCenterX, bottomLeftCenterY, cornerRadius + padding);
-
-    // Ensure the intersection is on the desired quarter of the circle
-    if (arcIntersections.length > 0 && arcIntersections[0] <= bottomLeftCenterX && arcIntersections[1] >= bottomLeftCenterY) {
-      return [arcIntersections[0], arcIntersections[1]];
-    }
-  }
-  return []; // if nothing
-};
-
-//this function gives the intersections of any line with the upper half of perturbing agent
-sbgn.perturbingAgentIntersectLine = function (x1, y1, x2, y2, nodeX, nodeY, width, height, padding) {
-
-  var halfWidth = width / 2;
-  var halfHeight = height / 2;
-
-  // Check intersections with straight line segments
-  var straightLineIntersections = [];
-
-  // Top segment, left to right
-  {
-    var topStartX = nodeX - halfWidth - padding;
-    var topStartY = nodeY - halfHeight - padding;
-    var topEndX = nodeX + halfWidth + padding;
-    var topEndY = topStartY;
-
-    var intersection = cyMath.finiteLinesIntersect(x1, y1, x2, y2, topStartX, topStartY, topEndX, topEndY, false);
-
-    if (intersection.length > 0) {
-      straightLineIntersections = straightLineIntersections.concat(intersection);
-    }
-  }
-
-  // Right segment, top to bottom
-  {
-    var rightStartX = nodeX + halfWidth + padding;
-    var rightStartY = nodeY - halfHeight - padding;
-    var rightEndX = rightStartX - halfWidth / 2;
-    var rightEndY = nodeY + padding;
-
-    var intersection = cyMath.finiteLinesIntersect(x1, y1, x2, y2, rightStartX, rightStartY, rightEndX, rightEndY, false);
-
-    if (intersection.length > 0) {
-      straightLineIntersections = straightLineIntersections.concat(intersection);
-    }
-  }
-
-  // Left segment, top to bottom
-  {
-    var leftStartX = nodeX - halfWidth - padding;
-    var leftStartY = nodeY - halfHeight - padding;
-    var leftEndX = leftStartX + halfWidth / 2;
-    var leftEndY = nodeY + padding;
-
-    var intersection = cyMath.finiteLinesIntersect(x1, y1, x2, y2, leftStartX, leftStartY, leftEndX, leftEndY, false);
-
-    if (intersection.length > 0) {
-      straightLineIntersections = straightLineIntersections.concat(intersection);
-    }
-  }
-
-  return straightLineIntersections;
-};
-
-//this function gives the intersections of any line with a round rectangle
-sbgn.roundRectangleIntersectLine = function (x1, y1, x2, y2, nodeX, nodeY, width, height, cornerRadius, padding) {
-
-  var halfWidth = width / 2;
-  var halfHeight = height / 2;
-
-  // Check intersections with straight line segments
-  var straightLineIntersections = [];
-  // Top segment, left to right
-  {
-    var topStartX = nodeX - halfWidth + cornerRadius - padding;
-    var topStartY = nodeY - halfHeight - padding;
-    var topEndX = nodeX + halfWidth - cornerRadius + padding;
-    var topEndY = topStartY;
-
-    var intersection = cyMath.finiteLinesIntersect(x1, y1, x2, y2, topStartX, topStartY, topEndX, topEndY, false);
-
-    if (intersection.length > 0) {
-      straightLineIntersections = straightLineIntersections.concat(intersection);
-    }
-  }
-
-  // Right segment, top to bottom
-  {
-    var rightStartX = nodeX + halfWidth + padding;
-    var rightStartY = nodeY - halfHeight + cornerRadius - padding;
-    var rightEndX = rightStartX;
-    var rightEndY = nodeY + halfHeight - cornerRadius + padding;
-
-    var intersection = cyMath.finiteLinesIntersect(x1, y1, x2, y2, rightStartX, rightStartY, rightEndX, rightEndY, false);
-
-    if (intersection.length > 0) {
-      straightLineIntersections = straightLineIntersections.concat(intersection);
-    }
-  }
-
-  // Bottom segment, left to right
-  {
-    var bottomStartX = nodeX - halfWidth + cornerRadius - padding;
-    var bottomStartY = nodeY + halfHeight + padding;
-    var bottomEndX = nodeX + halfWidth - cornerRadius + padding;
-    var bottomEndY = bottomStartY;
-
-    var intersection = cyMath.finiteLinesIntersect(x1, y1, x2, y2, bottomStartX, bottomStartY, bottomEndX, bottomEndY, false);
-
-    if (intersection.length > 0) {
-      straightLineIntersections = straightLineIntersections.concat(intersection);
-    }
-  }
-
-  // Left segment, top to bottom
-  {
-    var leftStartX = nodeX - halfWidth - padding;
-    var leftStartY = nodeY - halfHeight + cornerRadius - padding;
-    var leftEndX = leftStartX;
-    var leftEndY = nodeY + halfHeight - cornerRadius + padding;
-
-    var intersection = cyMath.finiteLinesIntersect(x1, y1, x2, y2, leftStartX, leftStartY, leftEndX, leftEndY, false);
-
-    if (intersection.length > 0) {
-      straightLineIntersections = straightLineIntersections.concat(intersection);
-    }
-  }
-
-  // Check intersections with arc segments
-  var arcIntersections;
-
-  // Top Left
-  {
-    var topLeftCenterX = nodeX - halfWidth + cornerRadius;
-    var topLeftCenterY = nodeY - halfHeight + cornerRadius;
-    arcIntersections = cyMath.intersectLineCircle(x1, y1, x2, y2, topLeftCenterX, topLeftCenterY, cornerRadius + padding);
-
-    // Ensure the intersection is on the desired quarter of the circle
-    if (arcIntersections.length > 0 && arcIntersections[0] <= topLeftCenterX && arcIntersections[1] <= topLeftCenterY) {
-      straightLineIntersections = straightLineIntersections.concat(arcIntersections);
-    }
-  }
-
-  // Top Right
-  {
-    var topRightCenterX = nodeX + halfWidth - cornerRadius;
-    var topRightCenterY = nodeY - halfHeight + cornerRadius;
-    arcIntersections = cyMath.intersectLineCircle(x1, y1, x2, y2, topRightCenterX, topRightCenterY, cornerRadius + padding);
-
-    // Ensure the intersection is on the desired quarter of the circle
-    if (arcIntersections.length > 0 && arcIntersections[0] >= topRightCenterX && arcIntersections[1] <= topRightCenterY) {
-      straightLineIntersections = straightLineIntersections.concat(arcIntersections);
-    }
-  }
-
-  // Bottom Right
-  {
-    var bottomRightCenterX = nodeX + halfWidth - cornerRadius;
-    var bottomRightCenterY = nodeY + halfHeight - cornerRadius;
-    arcIntersections = cyMath.intersectLineCircle(x1, y1, x2, y2, bottomRightCenterX, bottomRightCenterY, cornerRadius + padding);
-
-    // Ensure the intersection is on the desired quarter of the circle
-    if (arcIntersections.length > 0 && arcIntersections[0] >= bottomRightCenterX && arcIntersections[1] >= bottomRightCenterY) {
-      straightLineIntersections = straightLineIntersections.concat(arcIntersections);
-    }
-  }
-
-  // Bottom Left
-  {
-    var bottomLeftCenterX = nodeX - halfWidth + cornerRadius;
-    var bottomLeftCenterY = nodeY + halfHeight - cornerRadius;
-    arcIntersections = cyMath.intersectLineCircle(x1, y1, x2, y2, bottomLeftCenterX, bottomLeftCenterY, cornerRadius + padding);
-
-    // Ensure the intersection is on the desired quarter of the circle
-    if (arcIntersections.length > 0 && arcIntersections[0] <= bottomLeftCenterX && arcIntersections[1] >= bottomLeftCenterY) {
-      straightLineIntersections = straightLineIntersections.concat(arcIntersections);
-    }
-  }
-
-  if (straightLineIntersections.length > 0) return straightLineIntersections;
-  return []; // if nothing
-};
-
-sbgn.intersectLineEllipse = function (x1, y1, x2, y2, centerX, centerY, width, height, padding) {
-
-  var w = width / 2 + padding;
-  var h = height / 2 + padding;
-  var an = centerX;
-  var bn = centerY;
-
-  var d = [x2 - x1, y2 - y1];
-
-  var m = d[1] / d[0];
-  var n = -1 * m * x2 + y2;
-  var a = h * h + w * w * m * m;
-  var b = -2 * an * h * h + 2 * m * n * w * w - 2 * bn * m * w * w;
-  var c = an * an * h * h + n * n * w * w - 2 * bn * w * w * n + bn * bn * w * w - h * h * w * w;
-
-  var discriminant = b * b - 4 * a * c;
-
-  if (discriminant < 0) {
-    return [];
-  }
-
-  var t1 = (-b + Math.sqrt(discriminant)) / (2 * a);
-  var t2 = (-b - Math.sqrt(discriminant)) / (2 * a);
-
-  var xMin = Math.min(t1, t2);
-  var xMax = Math.max(t1, t2);
-
-  var yMin = m * xMin - m * x2 + y2;
-  var yMax = m * xMax - m * x2 + y2;
-
-  return [xMin, yMin, xMax, yMax];
-};
-
-// sbgn.intersectLineStateAndInfoBoxes = function (node, x, y) {
-//   var centerX = node._private.position.x;
-//   var centerY = node._private.position.y;
-//   var padding = parseInt(node.css('border-width')) / 2;
-
-//   var stateAndInfos = node._private.data.statesandinfos;
-
-//   var intersections = [];
-
-//   for (var i = 0; i < stateAndInfos.length; i++) {
-//     var state = stateAndInfos[i];
-
-//     if (!state.isDisplayed) {
-//       continue;
-//     }
-
-//     var infoBoxWidth = state.bbox.w;
-//     var infoBoxHeight = state.bbox.h;
-
-//     var currIntersections = null;
-
-//     if (state.clazz == "state variable") {
-//       var coord = classes.StateVariable.getAbsoluteCoord(state, node.cy());
-//       currIntersections = sbgn.intersectLineEllipse(x, y, centerX, centerY,
-//         coord.x, coord.y, infoBoxWidth, infoBoxHeight, padding);
-//     }
-//     else if (state.clazz == "unit of information") {
-//       var coord = classes.UnitOfInformation.getAbsoluteCoord(state, node.cy());
-//       if (node.data("class") == "BA macromolecule" || node.data("class") == "BA nucleic acid feature"
-//         || node.data("class") == "BA complex") {
-//         currIntersections = sbgn.roundRectangleIntersectLine(x, y, centerX, centerY,
-//           coord.x, coord.y, infoBoxWidth, infoBoxHeight, 5, padding);
-//       }
-//       else if (node.data("class") == "BA unspecified entity") {
-//         currIntersections = sbgn.intersectLineEllipse(x, y, centerX, centerY,
-//           coord.x, coord.y, infoBoxWidth, infoBoxHeight, padding);
-//       }
-//       else if (node.data("class") == "BA simple chemical") {
-//         currIntersections = cyMath.intersectLineCircle(
-//           x, y,
-//           centerX, centerY,
-//           coord.x,
-//           coord.y,
-//           infoBoxWidth / 4);
-//       }
-//       else if (node.data("class") == "BA perturbing agent") {
-//         currIntersections = sbgn.perturbingAgentIntersectLine(x, y, centerX, centerY,
-//           coord.x, coord.y, infoBoxWidth, infoBoxHeight, padding);
-//       }
-//       else {
-//         currIntersections = sbgn.roundRectangleIntersectLine(x, y, centerX, centerY,
-//           coord.x, coord.y, infoBoxWidth, infoBoxHeight, 0, padding);
-//       }
-//     }
-
-//     intersections = intersections.concat(currIntersections);
-
-//   }
-
-//   return intersections;
-// };
-
-// sbgn.checkPointStateAndInfoBoxes = function (x, y, node, threshold) {
-//   return classes.AuxiliaryUnit.checkPoint(x, y, node, threshold);
-// };
-
-sbgn.isNodeShapeTotallyOverriden = function (render, node) {
-  if (totallyOverridenNodeShapes[render.getNodeShape(node)]) {
-    return true;
-  }
-
-  return false;
-};
-
-sbgn.isActive = function (node) {
-  return false;
-};
 
 module.exports = sbgn;
 
@@ -3275,7 +2006,7 @@ var is = __webpack_require__(0);
 var Map = __webpack_require__(32);
 var Set = __webpack_require__(10);
 
-var Element = __webpack_require__(18);
+var Element = __webpack_require__(17);
 
 // factory for generating edge ids when no id is specified for a new element
 var idFactory = {
@@ -4172,6 +2903,41 @@ module.exports = __webpack_require__(36);
 "use strict";
 
 
+// storage for parsed queries
+var newQuery = function newQuery() {
+  return {
+    classes: [],
+    colonSelectors: [],
+    data: [],
+    group: null,
+    ids: [],
+    meta: [],
+
+    // fake selectors
+    collection: null, // a collection to match against
+    filter: null, // filter function
+
+    // these are defined in the upward direction rather than down (e.g. child)
+    // because we need to go up in Selector.filter()
+    parent: null, // parent query obj
+    ancestor: null, // ancestor query obj
+    subject: null, // defines subject in compound query (subject query obj; points to self if subject)
+
+    // use these only when subject has been defined
+    child: null,
+    descendant: null
+  };
+};
+
+module.exports = newQuery;
+
+/***/ }),
+/* 13 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
 var math = __webpack_require__(2);
 var sbgn = __webpack_require__(7);
 
@@ -4626,41 +3392,6 @@ BRp.registerNodeShapes = function () {
 module.exports = BRp;
 
 /***/ }),
-/* 13 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-// storage for parsed queries
-var newQuery = function newQuery() {
-  return {
-    classes: [],
-    colonSelectors: [],
-    data: [],
-    group: null,
-    ids: [],
-    meta: [],
-
-    // fake selectors
-    collection: null, // a collection to match against
-    filter: null, // filter function
-
-    // these are defined in the upward direction rather than down (e.g. child)
-    // because we need to go up in Selector.filter()
-    parent: null, // parent query obj
-    ancestor: null, // ancestor query obj
-    subject: null, // defines subject in compound query (subject query obj; points to self if subject)
-
-    // use these only when subject has been defined
-    child: null,
-    descendant: null
-  };
-};
-
-module.exports = newQuery;
-
-/***/ }),
 /* 14 */
 /***/ (function(module, exports, __webpack_require__) {
 
@@ -4669,454 +3400,7 @@ module.exports = newQuery;
 
 var util = __webpack_require__(1);
 var is = __webpack_require__(0);
-
-var styfn = {};
-
-(function () {
-  var number = util.regex.number;
-  var rgba = util.regex.rgbaNoBackRefs;
-  var hsla = util.regex.hslaNoBackRefs;
-  var hex3 = util.regex.hex3;
-  var hex6 = util.regex.hex6;
-  var data = function data(prefix) {
-    return '^' + prefix + '\\s*\\(\\s*([\\w\\.]+)\\s*\\)$';
-  };
-  var mapData = function mapData(prefix) {
-    var mapArg = number + '|\\w+|' + rgba + '|' + hsla + '|' + hex3 + '|' + hex6;
-    return '^' + prefix + '\\s*\\(([\\w\\.]+)\\s*\\,\\s*(' + number + ')\\s*\\,\\s*(' + number + ')\\s*,\\s*(' + mapArg + ')\\s*\\,\\s*(' + mapArg + ')\\)$';
-  };
-  var urlRegexes = ['^url\\s*\\(\\s*[\'"]?(.+?)[\'"]?\\s*\\)$', '^(none)$', '^(.+)$'];
-
-  // each visual style property has a type and needs to be validated according to it
-  styfn.types = {
-    time: { number: true, min: 0, units: 's|ms', implicitUnits: 'ms' },
-    percent: { number: true, min: 0, max: 100, units: '%', implicitUnits: '%' },
-    zeroOneNumber: { number: true, min: 0, max: 1, unitless: true },
-    zeroOneNumbers: { number: true, min: 0, max: 1, unitless: true, multiple: true },
-    nOneOneNumber: { number: true, min: -1, max: 1, unitless: true },
-    nonNegativeInt: { number: true, min: 0, integer: true, unitless: true },
-    position: { enums: ['parent', 'origin'] },
-    nodeSize: { number: true, min: 0, enums: ['label'] },
-    number: { number: true, unitless: true },
-    numbers: { number: true, unitless: true, multiple: true },
-    positiveNumber: { number: true, unitless: true, min: 0, strictMin: true },
-    size: { number: true, min: 0 },
-    bidirectionalSize: { number: true }, // allows negative
-    bidirectionalSizes: { number: true, multiple: true }, // allows negative
-    sizeMaybePercent: { number: true, min: 0, allowPercent: true },
-    paddingRelativeTo: { enums: ['width', 'height', 'average', 'min', 'max'] },
-    bgWH: { number: true, min: 0, allowPercent: true, enums: ['auto'], multiple: true },
-    bgPos: { number: true, allowPercent: true, multiple: true },
-    bgRelativeTo: { enums: ['inner', 'include-padding'], multiple: true },
-    bgRepeat: { enums: ['repeat', 'repeat-x', 'repeat-y', 'no-repeat'], multiple: true },
-    bgFit: { enums: ['none', 'contain', 'cover'], multiple: true },
-    bgCrossOrigin: { enums: ['anonymous', 'use-credentials'], multiple: true },
-    bgClip: { enums: ['none', 'node'] },
-    color: { color: true },
-    bool: { enums: ['yes', 'no'] },
-    lineStyle: { enums: ['solid', 'dotted', 'dashed'] },
-    borderStyle: { enums: ['solid', 'dotted', 'dashed', 'double'] },
-    curveStyle: { enums: ['bezier', 'unbundled-bezier', 'haystack', 'segments'] },
-    fontFamily: { regex: '^([\\w- \\"]+(?:\\s*,\\s*[\\w- \\"]+)*)$' },
-    fontletiant: { enums: ['small-caps', 'normal'] },
-    fontStyle: { enums: ['italic', 'normal', 'oblique'] },
-    fontWeight: { enums: ['normal', 'bold', 'bolder', 'lighter', '100', '200', '300', '400', '500', '600', '800', '900', 100, 200, 300, 400, 500, 600, 700, 800, 900] },
-    textDecoration: { enums: ['none', 'underline', 'overline', 'line-through'] },
-    textTransform: { enums: ['none', 'uppercase', 'lowercase'] },
-    textWrap: { enums: ['none', 'wrap', 'ellipsis'] },
-    textBackgroundShape: { enums: ['rectangle', 'roundrectangle'] },
-    nodeShape: { enums: ['rectangle', 'roundrectangle', 'cutrectangle', 'bottomroundrectangle', 'barrel', 'ellipse', 'triangle', 'square', 'pentagon', 'hexagon', 'concavehexagon', 'heptagon', 'octagon', 'tag', 'star', 'diamond', 'vee', 'rhomboid', 'polygon'] },
-    compoundIncludeLabels: { enums: ['include', 'exclude'] },
-    arrowShape: { enums: ['tee', 'triangle', 'triangle-tee', 'triangle-cross', 'triangle-backcurve', 'half-triangle-overshot', 'vee', 'square', 'circle', 'diamond', 'none'] },
-    arrowFill: { enums: ['filled', 'hollow'] },
-    display: { enums: ['element', 'none'] },
-    visibility: { enums: ['hidden', 'visible'] },
-    zCompoundDepth: { enums: ['bottom', 'orphan', 'auto', 'top'] },
-    zIndexCompare: { enums: ['auto', 'manual'] },
-    valign: { enums: ['top', 'center', 'bottom'] },
-    halign: { enums: ['left', 'center', 'right'] },
-    text: { string: true },
-    data: { mapping: true, regex: data('data') },
-    layoutData: { mapping: true, regex: data('layoutData') },
-    scratch: { mapping: true, regex: data('scratch') },
-    mapData: { mapping: true, regex: mapData('mapData') },
-    mapLayoutData: { mapping: true, regex: mapData('mapLayoutData') },
-    mapScratch: { mapping: true, regex: mapData('mapScratch') },
-    fn: { mapping: true, fn: true },
-    url: { regexes: urlRegexes, singleRegexMatchValue: true },
-    urls: { regexes: urlRegexes, singleRegexMatchValue: true, multiple: true },
-    propList: { propList: true },
-    angle: { number: true, units: 'deg|rad', implicitUnits: 'rad' },
-    textRotation: { number: true, units: 'deg|rad', implicitUnits: 'rad', enums: ['none', 'autorotate'] },
-    polygonPointList: { number: true, multiple: true, evenMultiple: true, min: -1, max: 1, unitless: true },
-    edgeDistances: { enums: ['intersection', 'node-position'] },
-    edgeEndpoint: {
-      number: true, multiple: true, units: '%|px|em|deg|rad', implicitUnits: 'px',
-      enums: ['inside-to-node', 'outside-to-node', 'outside-to-line'], singleEnum: true,
-      validate: function validate(valArr, unitsArr) {
-        switch (valArr.length) {
-          case 2:
-            // can be % or px only
-            return unitsArr[0] !== 'deg' && unitsArr[0] !== 'rad' && unitsArr[1] !== 'deg' && unitsArr[1] !== 'rad';
-          case 1:
-            // can be enum, deg, or rad only
-            return is.string(valArr[0]) || unitsArr[0] === 'deg' || unitsArr[0] === 'rad';
-          default:
-            return false;
-        }
-      }
-    },
-    easing: {
-      regexes: ['^(spring)\\s*\\(\\s*(' + number + ')\\s*,\\s*(' + number + ')\\s*\\)$', '^(cubic-bezier)\\s*\\(\\s*(' + number + ')\\s*,\\s*(' + number + ')\\s*,\\s*(' + number + ')\\s*,\\s*(' + number + ')\\s*\\)$'],
-      enums: ['linear', 'ease', 'ease-in', 'ease-out', 'ease-in-out', 'ease-in-sine', 'ease-out-sine', 'ease-in-out-sine', 'ease-in-quad', 'ease-out-quad', 'ease-in-out-quad', 'ease-in-cubic', 'ease-out-cubic', 'ease-in-out-cubic', 'ease-in-quart', 'ease-out-quart', 'ease-in-out-quart', 'ease-in-quint', 'ease-out-quint', 'ease-in-out-quint', 'ease-in-expo', 'ease-out-expo', 'ease-in-out-expo', 'ease-in-circ', 'ease-out-circ', 'ease-in-out-circ']
-    }
-  };
-
-  var zOrderDiff = {
-    zeroNonZero: function zeroNonZero(val1, val2) {
-      if (val1 === 0 && val2 !== 0) {
-        return true;
-      } else if (val1 !== 0 && val2 === 0) {
-        return true;
-      } else {
-        return false;
-      }
-    },
-    anyDiff: function anyDiff(val1, val2) {
-      return val1 !== val2;
-    }
-  };
-
-  var zd = zOrderDiff;
-
-  // define visual style properties
-  var t = styfn.types;
-  var props = styfn.properties = [
-  // main label
-  { name: 'label', type: t.text }, { name: 'text-rotation', type: t.textRotation }, { name: 'text-margin-x', type: t.bidirectionalSize }, { name: 'text-margin-y', type: t.bidirectionalSize },
-
-  // source label
-  { name: 'source-label', type: t.text }, { name: 'source-text-rotation', type: t.textRotation }, { name: 'source-text-margin-x', type: t.bidirectionalSize }, { name: 'source-text-margin-y', type: t.bidirectionalSize }, { name: 'source-text-offset', type: t.size },
-
-  // target label
-  { name: 'target-label', type: t.text }, { name: 'target-text-rotation', type: t.textRotation }, { name: 'target-text-margin-x', type: t.bidirectionalSize }, { name: 'target-text-margin-y', type: t.bidirectionalSize }, { name: 'target-text-offset', type: t.size },
-
-  // common label style
-  { name: 'text-valign', type: t.valign }, { name: 'text-halign', type: t.halign }, { name: 'color', type: t.color }, { name: 'text-outline-color', type: t.color }, { name: 'text-outline-width', type: t.size }, { name: 'text-outline-opacity', type: t.zeroOneNumber }, { name: 'text-opacity', type: t.zeroOneNumber }, { name: 'text-background-color', type: t.color }, { name: 'text-background-opacity', type: t.zeroOneNumber }, { name: 'text-background-padding', type: t.size }, { name: 'text-border-opacity', type: t.zeroOneNumber }, { name: 'text-border-color', type: t.color }, { name: 'text-border-width', type: t.size }, { name: 'text-border-style', type: t.borderStyle }, { name: 'text-background-shape', type: t.textBackgroundShape },
-  // { name: 'text-decoration', type: t.textDecoration }, // not supported in canvas
-  { name: 'text-transform', type: t.textTransform }, { name: 'text-wrap', type: t.textWrap }, { name: 'text-max-width', type: t.size }, { name: 'text-events', type: t.bool }, { name: 'font-family', type: t.fontFamily }, { name: 'font-style', type: t.fontStyle },
-  // { name: 'font-letiant', type: t.fontletiant }, // not useful
-  { name: 'font-weight', type: t.fontWeight }, { name: 'font-size', type: t.size }, { name: 'min-zoomed-font-size', type: t.size },
-
-  // behaviour
-  { name: 'events', type: t.bool },
-
-  // visibility
-  { name: 'display', type: t.display, triggersZOrder: zd.anyDiff }, { name: 'visibility', type: t.visibility, triggersZOrder: zd.anyDiff }, { name: 'opacity', type: t.zeroOneNumber, triggersZOrder: zd.zeroNonZero }, { name: 'z-compound-depth', type: t.zCompoundDepth, triggersZOrder: zd.anyDiff }, { name: 'z-index-compare', type: t.zIndexCompare, triggersZOrder: zd.anyDiff }, { name: 'z-index', type: t.nonNegativeInt, triggersZOrder: zd.anyDiff },
-
-  // overlays
-  { name: 'overlay-padding', type: t.size }, { name: 'overlay-color', type: t.color }, { name: 'overlay-opacity', type: t.zeroOneNumber },
-
-  // transition anis
-  { name: 'transition-property', type: t.propList }, { name: 'transition-duration', type: t.time }, { name: 'transition-delay', type: t.time }, { name: 'transition-timing-function', type: t.easing },
-
-  // node body
-  { name: 'height', type: t.nodeSize }, { name: 'width', type: t.nodeSize }, { name: 'shape', type: t.nodeShape }, { name: 'shape-polygon-points', type: t.polygonPointList }, { name: 'background-color', type: t.color }, { name: 'background-opacity', type: t.zeroOneNumber }, { name: 'background-blacken', type: t.nOneOneNumber }, { name: 'padding', type: t.sizeMaybePercent }, { name: 'padding-relative-to', type: t.paddingRelativeTo },
-
-  // node border
-  { name: 'border-color', type: t.color }, { name: 'border-opacity', type: t.zeroOneNumber }, { name: 'border-width', type: t.size }, { name: 'border-style', type: t.borderStyle },
-
-  // node background images
-  { name: 'background-image', type: t.urls }, { name: 'background-image-crossorigin', type: t.bgCrossOrigin }, { name: 'background-image-opacity', type: t.zeroOneNumbers }, { name: 'background-position-x', type: t.bgPos }, { name: 'background-position-y', type: t.bgPos }, { name: 'background-width-relative-to', type: t.bgRelativeTo }, { name: 'background-height-relative-to', type: t.bgRelativeTo }, { name: 'background-repeat', type: t.bgRepeat }, { name: 'background-fit', type: t.bgFit }, { name: 'background-clip', type: t.bgClip }, { name: 'background-width', type: t.bgWH }, { name: 'background-height', type: t.bgWH },
-
-  // compound props
-  { name: 'position', type: t.position }, { name: 'compound-sizing-wrt-labels', type: t.compoundIncludeLabels }, { name: 'min-width', type: t.size }, { name: 'min-width-bias-left', type: t.sizeMaybePercent }, { name: 'min-width-bias-right', type: t.sizeMaybePercent }, { name: 'min-height', type: t.size }, { name: 'min-height-bias-top', type: t.sizeMaybePercent }, { name: 'min-height-bias-bottom', type: t.sizeMaybePercent },
-
-  // edge line
-  { name: 'line-style', type: t.lineStyle }, { name: 'line-color', type: t.color }, { name: 'line-fill', type: t.fill }, { name: 'line-cap', type: t.lineCap }, { name: 'line-dash-pattern', type: t.numbers }, { name: 'line-dash-offset', type: t.number }, { name: 'curve-style', type: t.curveStyle }, { name: 'haystack-radius', type: t.zeroOneNumber }, { name: 'source-endpoint', type: t.edgeEndpoint }, { name: 'target-endpoint', type: t.edgeEndpoint }, { name: 'control-point-step-size', type: t.size }, { name: 'control-point-distances', type: t.bidirectionalSizes }, { name: 'control-point-weights', type: t.numbers }, { name: 'segment-distances', type: t.bidirectionalSizes }, { name: 'segment-weights', type: t.numbers }, { name: 'edge-distances', type: t.edgeDistances }, { name: 'arrow-scale', type: t.positiveNumber }, { name: 'loop-direction', type: t.angle }, { name: 'loop-sweep', type: t.angle }, { name: 'source-distance-from-node', type: t.size }, { name: 'target-distance-from-node', type: t.size },
-
-  // ghost properties
-  { name: 'ghost', type: t.bool }, { name: 'ghost-offset-x', type: t.bidirectionalSize }, { name: 'ghost-offset-y', type: t.bidirectionalSize }, { name: 'ghost-opacity', type: t.zeroOneNumber },
-
-  // these are just for the core
-  { name: 'selection-box-color', type: t.color }, { name: 'selection-box-opacity', type: t.zeroOneNumber }, { name: 'selection-box-border-color', type: t.color }, { name: 'selection-box-border-width', type: t.size }, { name: 'active-bg-color', type: t.color }, { name: 'active-bg-opacity', type: t.zeroOneNumber }, { name: 'active-bg-size', type: t.size }, { name: 'outside-texture-bg-color', type: t.color }, { name: 'outside-texture-bg-opacity', type: t.zeroOneNumber }];
-
-  // define aliases
-  var aliases = styfn.aliases = [{ name: 'content', pointsTo: 'label' }, { name: 'control-point-distance', pointsTo: 'control-point-distances' }, { name: 'control-point-weight', pointsTo: 'control-point-weights' }, { name: 'edge-text-rotation', pointsTo: 'text-rotation' }, { name: 'padding-left', pointsTo: 'padding' }, { name: 'padding-right', pointsTo: 'padding' }, { name: 'padding-top', pointsTo: 'padding' }, { name: 'padding-bottom', pointsTo: 'padding' }];
-
-  // pie backgrounds for nodes
-  styfn.pieBackgroundN = 16; // because the pie properties are numbered, give access to a constant N (for renderer use)
-  props.push({ name: 'pie-size', type: t.sizeMaybePercent });
-  for (var i = 1; i <= styfn.pieBackgroundN; i++) {
-    props.push({ name: 'pie-' + i + '-background-color', type: t.color });
-    props.push({ name: 'pie-' + i + '-background-size', type: t.percent });
-    props.push({ name: 'pie-' + i + '-background-opacity', type: t.zeroOneNumber });
-  }
-
-  // edge arrows
-  var arrowPrefixes = styfn.arrowPrefixes = ['source', 'mid-source', 'target', 'mid-target'];
-  [{ name: 'arrow-shape', type: t.arrowShape }, { name: 'arrow-color', type: t.color }, { name: 'arrow-fill', type: t.arrowFill }].forEach(function (prop) {
-    arrowPrefixes.forEach(function (prefix) {
-      var name = prefix + '-' + prop.name;
-      var type = prop.type;
-
-      props.push({ name: name, type: type });
-    });
-  }, {});
-
-  // list of property names
-  styfn.propertyNames = props.map(function (p) {
-    return p.name;
-  });
-
-  // allow access of properties by name ( e.g. style.properties.height )
-  for (var _i = 0; _i < props.length; _i++) {
-    var prop = props[_i];
-
-    props[prop.name] = prop; // allow lookup by name
-  }
-
-  // map aliases
-  for (var _i2 = 0; _i2 < aliases.length; _i2++) {
-    var alias = aliases[_i2];
-    var pointsToProp = props[alias.pointsTo];
-    var aliasProp = {
-      name: alias.name,
-      alias: true,
-      pointsTo: pointsToProp
-    };
-
-    // add alias prop for parsing
-    props.push(aliasProp);
-
-    props[alias.name] = aliasProp; // allow lookup by name
-  }
-})();
-
-styfn.getDefaultProperty = function (name) {
-  return this.getDefaultProperties()[name];
-};
-
-styfn.getDefaultProperties = util.memoize(function () {
-  var rawProps = util.extend({
-    // common node/edge props
-    'events': 'yes',
-    'text-events': 'no',
-    'text-valign': 'top',
-    'text-halign': 'center',
-    'color': '#000',
-    'text-outline-color': '#000',
-    'text-outline-width': 0,
-    'text-outline-opacity': 1,
-    'text-opacity': 1,
-    'text-decoration': 'none',
-    'text-transform': 'none',
-    'text-wrap': 'none',
-    'text-max-width': 9999,
-    'text-background-color': '#000',
-    'text-background-opacity': 0,
-    'text-background-shape': 'rectangle',
-    'text-background-padding': 0,
-    'text-border-opacity': 0,
-    'text-border-width': 0,
-    'text-border-style': 'solid',
-    'text-border-color': '#000',
-    'font-family': 'Helvetica Neue, Helvetica, sans-serif',
-    'font-style': 'normal',
-    // 'font-letiant': fontletiant,
-    'font-weight': 'normal',
-    'font-size': 16,
-    'min-zoomed-font-size': 0,
-    'text-rotation': 'none',
-    'source-text-rotation': 'none',
-    'target-text-rotation': 'none',
-    'visibility': 'visible',
-    'display': 'element',
-    'opacity': 1,
-    'z-compound-depth': 'auto',
-    'z-index-compare': 'auto',
-    'z-index': 0,
-    'label': '',
-    'text-margin-x': 0,
-    'text-margin-y': 0,
-    'source-label': '',
-    'source-text-offset': 0,
-    'source-text-margin-x': 0,
-    'source-text-margin-y': 0,
-    'target-label': '',
-    'target-text-offset': 0,
-    'target-text-margin-x': 0,
-    'target-text-margin-y': 0,
-    'overlay-opacity': 0,
-    'overlay-color': '#000',
-    'overlay-padding': 10,
-    'transition-property': 'none',
-    'transition-duration': 0,
-    'transition-delay': 0,
-    'transition-timing-function': 'linear',
-
-    // node props
-    'background-blacken': 0,
-    'background-color': '#999',
-    'background-opacity': 1,
-    'background-image': 'none',
-    'background-image-crossorigin': 'anonymous',
-    'background-image-opacity': 1,
-    'background-position-x': '50%',
-    'background-position-y': '50%',
-    'background-width-relative-to': 'include-padding',
-    'background-height-relative-to': 'include-padding',
-    'background-repeat': 'no-repeat',
-    'background-fit': 'none',
-    'background-clip': 'node',
-    'background-width': 'auto',
-    'background-height': 'auto',
-    'border-color': '#000',
-    'border-opacity': 1,
-    'border-width': 0,
-    'border-style': 'solid',
-    'height': 30,
-    'width': 30,
-    'shape': 'ellipse',
-    'shape-polygon-points': '-1, -1,   1, -1,   1, 1,   -1, 1',
-
-    // ghost props
-    'ghost': 'no',
-    'ghost-offset-y': 0,
-    'ghost-offset-x': 0,
-    'ghost-opacity': 0,
-
-    // compound props
-    'padding': 0,
-    'padding-relative-to': 'width',
-    'position': 'origin',
-    'compound-sizing-wrt-labels': 'include',
-    'min-width': 0,
-    'min-width-bias-left': 0,
-    'min-width-bias-right': 0,
-    'min-height': 0,
-    'min-height-bias-top': 0,
-    'min-height-bias-bottom': 0
-  }, {
-    // node pie bg
-    'pie-size': '100%'
-  }, [{ name: 'pie-{{i}}-background-color', value: 'black' }, { name: 'pie-{{i}}-background-size', value: '0%' }, { name: 'pie-{{i}}-background-opacity', value: 1 }].reduce(function (css, prop) {
-    for (var i = 1; i <= styfn.pieBackgroundN; i++) {
-      var name = prop.name.replace('{{i}}', i);
-      var val = prop.value;
-
-      css[name] = val;
-    }
-
-    return css;
-  }, {}), {
-    // edge props
-    'line-style': 'solid',
-    'line-color': '#999',
-    'control-point-step-size': 40,
-    'control-point-weights': 0.5,
-    'segment-weights': 0.5,
-    'segment-distances': 20,
-    'edge-distances': 'intersection',
-    'curve-style': 'bezier',
-    'haystack-radius': 0,
-    'arrow-scale': 1,
-    'loop-direction': '-45deg',
-    'loop-sweep': '-90deg',
-    'source-distance-from-node': 0,
-    'target-distance-from-node': 0,
-    'source-endpoint': 'outside-to-node',
-    'target-endpoint': 'outside-to-node',
-    'line-dash-pattern': [6, 3],
-    'line-dash-offset': 0
-  }, [{ name: 'arrow-shape', value: 'none' }, { name: 'arrow-color', value: '#999' }, { name: 'arrow-fill', value: 'filled' }].reduce(function (css, prop) {
-    styfn.arrowPrefixes.forEach(function (prefix) {
-      var name = prefix + '-' + prop.name;
-      var val = prop.value;
-
-      css[name] = val;
-    });
-
-    return css;
-  }, {}));
-
-  var parsedProps = {};
-
-  for (var i = 0; i < this.properties.length; i++) {
-    var prop = this.properties[i];
-
-    if (prop.pointsTo) {
-      continue;
-    }
-
-    var name = prop.name;
-    var val = rawProps[name];
-    var parsedProp = this.parse(name, val);
-
-    parsedProps[name] = parsedProp;
-  }
-
-  return parsedProps;
-});
-
-styfn.addDefaultStylesheet = function () {
-  this.selector('$node > node') // compound (parent) node properties
-  .css({
-    'shape': 'rectangle',
-    'padding': 10,
-    'background-color': '#eee',
-    'border-color': '#ccc',
-    'border-width': 1
-  }).selector('edge') // just edge properties
-  .css({
-    'width': 3,
-    'curve-style': 'haystack'
-  }).selector(':parent <-> node').css({
-    'curve-style': 'bezier',
-    'source-endpoint': 'outside-to-line',
-    'target-endpoint': 'outside-to-line'
-  }).selector(':selected').css({
-    'background-color': '#0169D9',
-    'line-color': '#0169D9',
-    'source-arrow-color': '#0169D9',
-    'target-arrow-color': '#0169D9',
-    'mid-source-arrow-color': '#0169D9',
-    'mid-target-arrow-color': '#0169D9'
-  }).selector('node:parent:selected').css({
-    'background-color': '#CCE1F9',
-    'border-color': '#aec8e5'
-  }).selector(':active').css({
-    'overlay-color': 'black',
-    'overlay-padding': 10,
-    'overlay-opacity': 0.25
-  }).selector('core') // just core properties
-  .css({
-    'selection-box-color': '#ddd',
-    'selection-box-opacity': 0.65,
-    'selection-box-border-color': '#aaa',
-    'selection-box-border-width': 1,
-    'active-bg-color': 'black',
-    'active-bg-opacity': 0.15,
-    'active-bg-size': 30,
-    'outside-texture-bg-color': '#000',
-    'outside-texture-bg-opacity': 0.125
-  });
-
-  this.defaultLength = this.length;
-};
-
-module.exports = styfn;
-
-/***/ }),
-/* 15 */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-var util = __webpack_require__(1);
-var is = __webpack_require__(0);
-var Event = __webpack_require__(20);
+var Event = __webpack_require__(19);
 
 var eventRegex = /^([^.]+)(\.(?:[^.]+))?$/; // regex for matching event strings (e.g. "click.namespace")
 var universalNamespace = '.*'; // matches as if no namespace specified and prevents users from unbinding accidentally
@@ -5349,7 +3633,7 @@ p.emit = p.trigger = function (events, extraParams, manualCallback) {
 module.exports = Emitter;
 
 /***/ }),
-/* 16 */
+/* 15 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -5796,7 +4080,7 @@ corefn.$id = corefn.getElementById;
 module.exports = Core;
 
 /***/ }),
-/* 17 */
+/* 16 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -5841,7 +4125,7 @@ module.exports = function memoize(fn, keyFn) {
 };
 
 /***/ }),
-/* 18 */
+/* 17 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -5955,7 +4239,7 @@ var Element = function Element(cy, params, restore) {
 module.exports = Element;
 
 /***/ }),
-/* 19 */
+/* 18 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -6132,7 +4416,7 @@ var stateSelectorRegex = '(' + stateSelectors.map(function (s) {
 module.exports = { stateSelectors: stateSelectors, stateSelectorMatches: stateSelectorMatches, stateSelectorRegex: stateSelectorRegex };
 
 /***/ }),
-/* 20 */
+/* 19 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -6252,7 +4536,7 @@ Event.prototype = {
 module.exports = Event;
 
 /***/ }),
-/* 21 */
+/* 20 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -6317,7 +4601,7 @@ var zIndexSort = function zIndexSort(a, b) {
 module.exports = zIndexSort;
 
 /***/ }),
-/* 22 */
+/* 21 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -6486,7 +4770,7 @@ Style.fromString = function (cy, string) {
   return new Style(cy).fromString(string);
 };
 
-[__webpack_require__(89), __webpack_require__(90), __webpack_require__(91), __webpack_require__(92), __webpack_require__(93), __webpack_require__(94), __webpack_require__(14), __webpack_require__(95)].forEach(function (props) {
+[__webpack_require__(89), __webpack_require__(90), __webpack_require__(91), __webpack_require__(92), __webpack_require__(93), __webpack_require__(94), __webpack_require__(22), __webpack_require__(95)].forEach(function (props) {
   util.extend(styfn, props);
 });
 
@@ -6494,6 +4778,453 @@ Style.types = styfn.types;
 Style.properties = styfn.properties;
 
 module.exports = Style;
+
+/***/ }),
+/* 22 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+
+var util = __webpack_require__(1);
+var is = __webpack_require__(0);
+
+var styfn = {};
+
+(function () {
+  var number = util.regex.number;
+  var rgba = util.regex.rgbaNoBackRefs;
+  var hsla = util.regex.hslaNoBackRefs;
+  var hex3 = util.regex.hex3;
+  var hex6 = util.regex.hex6;
+  var data = function data(prefix) {
+    return '^' + prefix + '\\s*\\(\\s*([\\w\\.]+)\\s*\\)$';
+  };
+  var mapData = function mapData(prefix) {
+    var mapArg = number + '|\\w+|' + rgba + '|' + hsla + '|' + hex3 + '|' + hex6;
+    return '^' + prefix + '\\s*\\(([\\w\\.]+)\\s*\\,\\s*(' + number + ')\\s*\\,\\s*(' + number + ')\\s*,\\s*(' + mapArg + ')\\s*\\,\\s*(' + mapArg + ')\\)$';
+  };
+  var urlRegexes = ['^url\\s*\\(\\s*[\'"]?(.+?)[\'"]?\\s*\\)$', '^(none)$', '^(.+)$'];
+
+  // each visual style property has a type and needs to be validated according to it
+  styfn.types = {
+    time: { number: true, min: 0, units: 's|ms', implicitUnits: 'ms' },
+    percent: { number: true, min: 0, max: 100, units: '%', implicitUnits: '%' },
+    zeroOneNumber: { number: true, min: 0, max: 1, unitless: true },
+    zeroOneNumbers: { number: true, min: 0, max: 1, unitless: true, multiple: true },
+    nOneOneNumber: { number: true, min: -1, max: 1, unitless: true },
+    nonNegativeInt: { number: true, min: 0, integer: true, unitless: true },
+    position: { enums: ['parent', 'origin'] },
+    nodeSize: { number: true, min: 0, enums: ['label'] },
+    number: { number: true, unitless: true },
+    numbers: { number: true, unitless: true, multiple: true },
+    positiveNumber: { number: true, unitless: true, min: 0, strictMin: true },
+    size: { number: true, min: 0 },
+    bidirectionalSize: { number: true }, // allows negative
+    bidirectionalSizes: { number: true, multiple: true }, // allows negative
+    sizeMaybePercent: { number: true, min: 0, allowPercent: true },
+    paddingRelativeTo: { enums: ['width', 'height', 'average', 'min', 'max'] },
+    bgWH: { number: true, min: 0, allowPercent: true, enums: ['auto'], multiple: true },
+    bgPos: { number: true, allowPercent: true, multiple: true },
+    bgRelativeTo: { enums: ['inner', 'include-padding'], multiple: true },
+    bgRepeat: { enums: ['repeat', 'repeat-x', 'repeat-y', 'no-repeat'], multiple: true },
+    bgFit: { enums: ['none', 'contain', 'cover'], multiple: true },
+    bgCrossOrigin: { enums: ['anonymous', 'use-credentials'], multiple: true },
+    bgClip: { enums: ['none', 'node'] },
+    color: { color: true },
+    bool: { enums: ['yes', 'no'] },
+    lineStyle: { enums: ['solid', 'dotted', 'dashed'] },
+    borderStyle: { enums: ['solid', 'dotted', 'dashed', 'double'] },
+    curveStyle: { enums: ['bezier', 'unbundled-bezier', 'haystack', 'segments'] },
+    fontFamily: { regex: '^([\\w- \\"]+(?:\\s*,\\s*[\\w- \\"]+)*)$' },
+    fontletiant: { enums: ['small-caps', 'normal'] },
+    fontStyle: { enums: ['italic', 'normal', 'oblique'] },
+    fontWeight: { enums: ['normal', 'bold', 'bolder', 'lighter', '100', '200', '300', '400', '500', '600', '800', '900', 100, 200, 300, 400, 500, 600, 700, 800, 900] },
+    textDecoration: { enums: ['none', 'underline', 'overline', 'line-through'] },
+    textTransform: { enums: ['none', 'uppercase', 'lowercase'] },
+    textWrap: { enums: ['none', 'wrap', 'ellipsis'] },
+    textBackgroundShape: { enums: ['rectangle', 'roundrectangle'] },
+    nodeShape: { enums: ['rectangle', 'roundrectangle', 'cutrectangle', 'bottomroundrectangle', 'barrel', 'ellipse', 'triangle', 'square', 'pentagon', 'hexagon', 'concavehexagon', 'heptagon', 'octagon', 'tag', 'star', 'diamond', 'vee', 'rhomboid', 'polygon'] },
+    compoundIncludeLabels: { enums: ['include', 'exclude'] },
+    arrowShape: { enums: ['tee', 'triangle', 'triangle-tee', 'triangle-cross', 'triangle-backcurve', 'half-triangle-overshot', 'vee', 'square', 'circle', 'diamond', 'none'] },
+    arrowFill: { enums: ['filled', 'hollow'] },
+    display: { enums: ['element', 'none'] },
+    visibility: { enums: ['hidden', 'visible'] },
+    zCompoundDepth: { enums: ['bottom', 'orphan', 'auto', 'top'] },
+    zIndexCompare: { enums: ['auto', 'manual'] },
+    valign: { enums: ['top', 'center', 'bottom'] },
+    halign: { enums: ['left', 'center', 'right'] },
+    text: { string: true },
+    data: { mapping: true, regex: data('data') },
+    layoutData: { mapping: true, regex: data('layoutData') },
+    scratch: { mapping: true, regex: data('scratch') },
+    mapData: { mapping: true, regex: mapData('mapData') },
+    mapLayoutData: { mapping: true, regex: mapData('mapLayoutData') },
+    mapScratch: { mapping: true, regex: mapData('mapScratch') },
+    fn: { mapping: true, fn: true },
+    url: { regexes: urlRegexes, singleRegexMatchValue: true },
+    urls: { regexes: urlRegexes, singleRegexMatchValue: true, multiple: true },
+    propList: { propList: true },
+    angle: { number: true, units: 'deg|rad', implicitUnits: 'rad' },
+    textRotation: { number: true, units: 'deg|rad', implicitUnits: 'rad', enums: ['none', 'autorotate'] },
+    polygonPointList: { number: true, multiple: true, evenMultiple: true, min: -1, max: 1, unitless: true },
+    edgeDistances: { enums: ['intersection', 'node-position'] },
+    edgeEndpoint: {
+      number: true, multiple: true, units: '%|px|em|deg|rad', implicitUnits: 'px',
+      enums: ['inside-to-node', 'outside-to-node', 'outside-to-line'], singleEnum: true,
+      validate: function validate(valArr, unitsArr) {
+        switch (valArr.length) {
+          case 2:
+            // can be % or px only
+            return unitsArr[0] !== 'deg' && unitsArr[0] !== 'rad' && unitsArr[1] !== 'deg' && unitsArr[1] !== 'rad';
+          case 1:
+            // can be enum, deg, or rad only
+            return is.string(valArr[0]) || unitsArr[0] === 'deg' || unitsArr[0] === 'rad';
+          default:
+            return false;
+        }
+      }
+    },
+    easing: {
+      regexes: ['^(spring)\\s*\\(\\s*(' + number + ')\\s*,\\s*(' + number + ')\\s*\\)$', '^(cubic-bezier)\\s*\\(\\s*(' + number + ')\\s*,\\s*(' + number + ')\\s*,\\s*(' + number + ')\\s*,\\s*(' + number + ')\\s*\\)$'],
+      enums: ['linear', 'ease', 'ease-in', 'ease-out', 'ease-in-out', 'ease-in-sine', 'ease-out-sine', 'ease-in-out-sine', 'ease-in-quad', 'ease-out-quad', 'ease-in-out-quad', 'ease-in-cubic', 'ease-out-cubic', 'ease-in-out-cubic', 'ease-in-quart', 'ease-out-quart', 'ease-in-out-quart', 'ease-in-quint', 'ease-out-quint', 'ease-in-out-quint', 'ease-in-expo', 'ease-out-expo', 'ease-in-out-expo', 'ease-in-circ', 'ease-out-circ', 'ease-in-out-circ']
+    }
+  };
+
+  var zOrderDiff = {
+    zeroNonZero: function zeroNonZero(val1, val2) {
+      if (val1 === 0 && val2 !== 0) {
+        return true;
+      } else if (val1 !== 0 && val2 === 0) {
+        return true;
+      } else {
+        return false;
+      }
+    },
+    anyDiff: function anyDiff(val1, val2) {
+      return val1 !== val2;
+    }
+  };
+
+  var zd = zOrderDiff;
+
+  // define visual style properties
+  var t = styfn.types;
+  var props = styfn.properties = [
+  // main label
+  { name: 'label', type: t.text }, { name: 'text-rotation', type: t.textRotation }, { name: 'text-margin-x', type: t.bidirectionalSize }, { name: 'text-margin-y', type: t.bidirectionalSize },
+
+  // source label
+  { name: 'source-label', type: t.text }, { name: 'source-text-rotation', type: t.textRotation }, { name: 'source-text-margin-x', type: t.bidirectionalSize }, { name: 'source-text-margin-y', type: t.bidirectionalSize }, { name: 'source-text-offset', type: t.size },
+
+  // target label
+  { name: 'target-label', type: t.text }, { name: 'target-text-rotation', type: t.textRotation }, { name: 'target-text-margin-x', type: t.bidirectionalSize }, { name: 'target-text-margin-y', type: t.bidirectionalSize }, { name: 'target-text-offset', type: t.size },
+
+  // common label style
+  { name: 'text-valign', type: t.valign }, { name: 'text-halign', type: t.halign }, { name: 'color', type: t.color }, { name: 'text-outline-color', type: t.color }, { name: 'text-outline-width', type: t.size }, { name: 'text-outline-opacity', type: t.zeroOneNumber }, { name: 'text-opacity', type: t.zeroOneNumber }, { name: 'text-background-color', type: t.color }, { name: 'text-background-opacity', type: t.zeroOneNumber }, { name: 'text-background-padding', type: t.size }, { name: 'text-border-opacity', type: t.zeroOneNumber }, { name: 'text-border-color', type: t.color }, { name: 'text-border-width', type: t.size }, { name: 'text-border-style', type: t.borderStyle }, { name: 'text-background-shape', type: t.textBackgroundShape },
+  // { name: 'text-decoration', type: t.textDecoration }, // not supported in canvas
+  { name: 'text-transform', type: t.textTransform }, { name: 'text-wrap', type: t.textWrap }, { name: 'text-max-width', type: t.size }, { name: 'text-events', type: t.bool }, { name: 'font-family', type: t.fontFamily }, { name: 'font-style', type: t.fontStyle },
+  // { name: 'font-letiant', type: t.fontletiant }, // not useful
+  { name: 'font-weight', type: t.fontWeight }, { name: 'font-size', type: t.size }, { name: 'min-zoomed-font-size', type: t.size },
+
+  // behaviour
+  { name: 'events', type: t.bool },
+
+  // visibility
+  { name: 'display', type: t.display, triggersZOrder: zd.anyDiff }, { name: 'visibility', type: t.visibility, triggersZOrder: zd.anyDiff }, { name: 'opacity', type: t.zeroOneNumber, triggersZOrder: zd.zeroNonZero }, { name: 'z-compound-depth', type: t.zCompoundDepth, triggersZOrder: zd.anyDiff }, { name: 'z-index-compare', type: t.zIndexCompare, triggersZOrder: zd.anyDiff }, { name: 'z-index', type: t.nonNegativeInt, triggersZOrder: zd.anyDiff },
+
+  // overlays
+  { name: 'overlay-padding', type: t.size }, { name: 'overlay-color', type: t.color }, { name: 'overlay-opacity', type: t.zeroOneNumber },
+
+  // transition anis
+  { name: 'transition-property', type: t.propList }, { name: 'transition-duration', type: t.time }, { name: 'transition-delay', type: t.time }, { name: 'transition-timing-function', type: t.easing },
+
+  // node body
+  { name: 'height', type: t.nodeSize }, { name: 'width', type: t.nodeSize }, { name: 'shape', type: t.nodeShape }, { name: 'shape-polygon-points', type: t.polygonPointList }, { name: 'background-color', type: t.color }, { name: 'background-opacity', type: t.zeroOneNumber }, { name: 'background-blacken', type: t.nOneOneNumber }, { name: 'padding', type: t.sizeMaybePercent }, { name: 'padding-relative-to', type: t.paddingRelativeTo },
+
+  // node border
+  { name: 'border-color', type: t.color }, { name: 'border-opacity', type: t.zeroOneNumber }, { name: 'border-width', type: t.size }, { name: 'border-style', type: t.borderStyle },
+
+  // node background images
+  { name: 'background-image', type: t.urls }, { name: 'background-image-crossorigin', type: t.bgCrossOrigin }, { name: 'background-image-opacity', type: t.zeroOneNumbers }, { name: 'background-position-x', type: t.bgPos }, { name: 'background-position-y', type: t.bgPos }, { name: 'background-width-relative-to', type: t.bgRelativeTo }, { name: 'background-height-relative-to', type: t.bgRelativeTo }, { name: 'background-repeat', type: t.bgRepeat }, { name: 'background-fit', type: t.bgFit }, { name: 'background-clip', type: t.bgClip }, { name: 'background-width', type: t.bgWH }, { name: 'background-height', type: t.bgWH },
+
+  // compound props
+  { name: 'position', type: t.position }, { name: 'compound-sizing-wrt-labels', type: t.compoundIncludeLabels }, { name: 'min-width', type: t.size }, { name: 'min-width-bias-left', type: t.sizeMaybePercent }, { name: 'min-width-bias-right', type: t.sizeMaybePercent }, { name: 'min-height', type: t.size }, { name: 'min-height-bias-top', type: t.sizeMaybePercent }, { name: 'min-height-bias-bottom', type: t.sizeMaybePercent },
+
+  // edge line
+  { name: 'line-style', type: t.lineStyle }, { name: 'line-color', type: t.color }, { name: 'line-fill', type: t.fill }, { name: 'line-cap', type: t.lineCap }, { name: 'line-dash-pattern', type: t.numbers }, { name: 'line-dash-offset', type: t.number }, { name: 'curve-style', type: t.curveStyle }, { name: 'haystack-radius', type: t.zeroOneNumber }, { name: 'source-endpoint', type: t.edgeEndpoint }, { name: 'target-endpoint', type: t.edgeEndpoint }, { name: 'control-point-step-size', type: t.size }, { name: 'control-point-distances', type: t.bidirectionalSizes }, { name: 'control-point-weights', type: t.numbers }, { name: 'segment-distances', type: t.bidirectionalSizes }, { name: 'segment-weights', type: t.numbers }, { name: 'edge-distances', type: t.edgeDistances }, { name: 'arrow-scale', type: t.positiveNumber }, { name: 'loop-direction', type: t.angle }, { name: 'loop-sweep', type: t.angle }, { name: 'source-distance-from-node', type: t.size }, { name: 'target-distance-from-node', type: t.size },
+
+  // ghost properties
+  { name: 'ghost', type: t.bool }, { name: 'ghost-offset-x', type: t.bidirectionalSize }, { name: 'ghost-offset-y', type: t.bidirectionalSize }, { name: 'ghost-opacity', type: t.zeroOneNumber },
+
+  // these are just for the core
+  { name: 'selection-box-color', type: t.color }, { name: 'selection-box-opacity', type: t.zeroOneNumber }, { name: 'selection-box-border-color', type: t.color }, { name: 'selection-box-border-width', type: t.size }, { name: 'active-bg-color', type: t.color }, { name: 'active-bg-opacity', type: t.zeroOneNumber }, { name: 'active-bg-size', type: t.size }, { name: 'outside-texture-bg-color', type: t.color }, { name: 'outside-texture-bg-opacity', type: t.zeroOneNumber }];
+
+  // define aliases
+  var aliases = styfn.aliases = [{ name: 'content', pointsTo: 'label' }, { name: 'control-point-distance', pointsTo: 'control-point-distances' }, { name: 'control-point-weight', pointsTo: 'control-point-weights' }, { name: 'edge-text-rotation', pointsTo: 'text-rotation' }, { name: 'padding-left', pointsTo: 'padding' }, { name: 'padding-right', pointsTo: 'padding' }, { name: 'padding-top', pointsTo: 'padding' }, { name: 'padding-bottom', pointsTo: 'padding' }];
+
+  // pie backgrounds for nodes
+  styfn.pieBackgroundN = 16; // because the pie properties are numbered, give access to a constant N (for renderer use)
+  props.push({ name: 'pie-size', type: t.sizeMaybePercent });
+  for (var i = 1; i <= styfn.pieBackgroundN; i++) {
+    props.push({ name: 'pie-' + i + '-background-color', type: t.color });
+    props.push({ name: 'pie-' + i + '-background-size', type: t.percent });
+    props.push({ name: 'pie-' + i + '-background-opacity', type: t.zeroOneNumber });
+  }
+
+  // edge arrows
+  var arrowPrefixes = styfn.arrowPrefixes = ['source', 'mid-source', 'target', 'mid-target'];
+  [{ name: 'arrow-shape', type: t.arrowShape }, { name: 'arrow-color', type: t.color }, { name: 'arrow-fill', type: t.arrowFill }].forEach(function (prop) {
+    arrowPrefixes.forEach(function (prefix) {
+      var name = prefix + '-' + prop.name;
+      var type = prop.type;
+
+      props.push({ name: name, type: type });
+    });
+  }, {});
+
+  // list of property names
+  styfn.propertyNames = props.map(function (p) {
+    return p.name;
+  });
+
+  // allow access of properties by name ( e.g. style.properties.height )
+  for (var _i = 0; _i < props.length; _i++) {
+    var prop = props[_i];
+
+    props[prop.name] = prop; // allow lookup by name
+  }
+
+  // map aliases
+  for (var _i2 = 0; _i2 < aliases.length; _i2++) {
+    var alias = aliases[_i2];
+    var pointsToProp = props[alias.pointsTo];
+    var aliasProp = {
+      name: alias.name,
+      alias: true,
+      pointsTo: pointsToProp
+    };
+
+    // add alias prop for parsing
+    props.push(aliasProp);
+
+    props[alias.name] = aliasProp; // allow lookup by name
+  }
+})();
+
+styfn.getDefaultProperty = function (name) {
+  return this.getDefaultProperties()[name];
+};
+
+styfn.getDefaultProperties = util.memoize(function () {
+  var rawProps = util.extend({
+    // common node/edge props
+    'events': 'yes',
+    'text-events': 'no',
+    'text-valign': 'top',
+    'text-halign': 'center',
+    'color': '#000',
+    'text-outline-color': '#000',
+    'text-outline-width': 0,
+    'text-outline-opacity': 1,
+    'text-opacity': 1,
+    'text-decoration': 'none',
+    'text-transform': 'none',
+    'text-wrap': 'none',
+    'text-max-width': 9999,
+    'text-background-color': '#000',
+    'text-background-opacity': 0,
+    'text-background-shape': 'rectangle',
+    'text-background-padding': 0,
+    'text-border-opacity': 0,
+    'text-border-width': 0,
+    'text-border-style': 'solid',
+    'text-border-color': '#000',
+    'font-family': 'Helvetica Neue, Helvetica, sans-serif',
+    'font-style': 'normal',
+    // 'font-letiant': fontletiant,
+    'font-weight': 'normal',
+    'font-size': 16,
+    'min-zoomed-font-size': 0,
+    'text-rotation': 'none',
+    'source-text-rotation': 'none',
+    'target-text-rotation': 'none',
+    'visibility': 'visible',
+    'display': 'element',
+    'opacity': 1,
+    'z-compound-depth': 'auto',
+    'z-index-compare': 'auto',
+    'z-index': 0,
+    'label': '',
+    'text-margin-x': 0,
+    'text-margin-y': 0,
+    'source-label': '',
+    'source-text-offset': 0,
+    'source-text-margin-x': 0,
+    'source-text-margin-y': 0,
+    'target-label': '',
+    'target-text-offset': 0,
+    'target-text-margin-x': 0,
+    'target-text-margin-y': 0,
+    'overlay-opacity': 0,
+    'overlay-color': '#000',
+    'overlay-padding': 10,
+    'transition-property': 'none',
+    'transition-duration': 0,
+    'transition-delay': 0,
+    'transition-timing-function': 'linear',
+
+    // node props
+    'background-blacken': 0,
+    'background-color': '#999',
+    'background-opacity': 1,
+    'background-image': 'none',
+    'background-image-crossorigin': 'anonymous',
+    'background-image-opacity': 1,
+    'background-position-x': '50%',
+    'background-position-y': '50%',
+    'background-width-relative-to': 'include-padding',
+    'background-height-relative-to': 'include-padding',
+    'background-repeat': 'no-repeat',
+    'background-fit': 'none',
+    'background-clip': 'node',
+    'background-width': 'auto',
+    'background-height': 'auto',
+    'border-color': '#000',
+    'border-opacity': 1,
+    'border-width': 0,
+    'border-style': 'solid',
+    'height': 30,
+    'width': 30,
+    'shape': 'ellipse',
+    'shape-polygon-points': '-1, -1,   1, -1,   1, 1,   -1, 1',
+
+    // ghost props
+    'ghost': 'no',
+    'ghost-offset-y': 0,
+    'ghost-offset-x': 0,
+    'ghost-opacity': 0,
+
+    // compound props
+    'padding': 0,
+    'padding-relative-to': 'width',
+    'position': 'origin',
+    'compound-sizing-wrt-labels': 'include',
+    'min-width': 0,
+    'min-width-bias-left': 0,
+    'min-width-bias-right': 0,
+    'min-height': 0,
+    'min-height-bias-top': 0,
+    'min-height-bias-bottom': 0
+  }, {
+    // node pie bg
+    'pie-size': '100%'
+  }, [{ name: 'pie-{{i}}-background-color', value: 'black' }, { name: 'pie-{{i}}-background-size', value: '0%' }, { name: 'pie-{{i}}-background-opacity', value: 1 }].reduce(function (css, prop) {
+    for (var i = 1; i <= styfn.pieBackgroundN; i++) {
+      var name = prop.name.replace('{{i}}', i);
+      var val = prop.value;
+
+      css[name] = val;
+    }
+
+    return css;
+  }, {}), {
+    // edge props
+    'line-style': 'solid',
+    'line-color': '#999',
+    'control-point-step-size': 40,
+    'control-point-weights': 0.5,
+    'segment-weights': 0.5,
+    'segment-distances': 20,
+    'edge-distances': 'intersection',
+    'curve-style': 'bezier',
+    'haystack-radius': 0,
+    'arrow-scale': 1,
+    'loop-direction': '-45deg',
+    'loop-sweep': '-90deg',
+    'source-distance-from-node': 0,
+    'target-distance-from-node': 0,
+    'source-endpoint': 'outside-to-node',
+    'target-endpoint': 'outside-to-node',
+    'line-dash-pattern': [6, 3],
+    'line-dash-offset': 0
+  }, [{ name: 'arrow-shape', value: 'none' }, { name: 'arrow-color', value: '#999' }, { name: 'arrow-fill', value: 'filled' }].reduce(function (css, prop) {
+    styfn.arrowPrefixes.forEach(function (prefix) {
+      var name = prefix + '-' + prop.name;
+      var val = prop.value;
+
+      css[name] = val;
+    });
+
+    return css;
+  }, {}));
+
+  var parsedProps = {};
+
+  for (var i = 0; i < this.properties.length; i++) {
+    var prop = this.properties[i];
+
+    if (prop.pointsTo) {
+      continue;
+    }
+
+    var name = prop.name;
+    var val = rawProps[name];
+    var parsedProp = this.parse(name, val);
+
+    parsedProps[name] = parsedProp;
+  }
+
+  return parsedProps;
+});
+
+styfn.addDefaultStylesheet = function () {
+  this.selector('$node > node') // compound (parent) node properties
+  .css({
+    'shape': 'rectangle',
+    'padding': 10,
+    'background-color': '#eee',
+    'border-color': '#ccc',
+    'border-width': 1
+  }).selector('edge') // just edge properties
+  .css({
+    'width': 3,
+    'curve-style': 'haystack'
+  }).selector(':parent <-> node').css({
+    'curve-style': 'bezier',
+    'source-endpoint': 'outside-to-line',
+    'target-endpoint': 'outside-to-line'
+  }).selector(':selected').css({
+    'background-color': '#0169D9',
+    'line-color': '#0169D9',
+    'source-arrow-color': '#0169D9',
+    'target-arrow-color': '#0169D9',
+    'mid-source-arrow-color': '#0169D9',
+    'mid-target-arrow-color': '#0169D9'
+  }).selector('node:parent:selected').css({
+    'background-color': '#CCE1F9',
+    'border-color': '#aec8e5'
+  }).selector(':active').css({
+    'overlay-color': 'black',
+    'overlay-padding': 10,
+    'overlay-opacity': 0.25
+  }).selector('core') // just core properties
+  .css({
+    'selection-box-color': '#ddd',
+    'selection-box-opacity': 0.65,
+    'selection-box-border-color': '#aaa',
+    'selection-box-border-width': 1,
+    'active-bg-color': 'black',
+    'active-bg-opacity': 0.15,
+    'active-bg-size': 30,
+    'outside-texture-bg-color': '#000',
+    'outside-texture-bg-opacity': 0.125
+  });
+
+  this.defaultLength = this.length;
+};
+
+module.exports = styfn;
 
 /***/ }),
 /* 23 */
@@ -6593,13 +5324,13 @@ module.exports = {
 
 
 var is = __webpack_require__(0);
-var Core = __webpack_require__(16);
+var Core = __webpack_require__(15);
 var extension = __webpack_require__(97);
 var Stylesheet = __webpack_require__(139);
 
-var baseNodeShapes = __webpack_require__(12).nodeShapes;
+var baseNodeShapes = __webpack_require__(13).nodeShapes;
 var math = __webpack_require__(2);
-var styleProperties = __webpack_require__(14);
+var styleProperties = __webpack_require__(22);
 var sbgn = __webpack_require__(7);
 
 var cytoscape = function cytoscape(options) {
@@ -7124,7 +5855,7 @@ module.exports = {
 "use strict";
 
 
-var memoize = __webpack_require__(17);
+var memoize = __webpack_require__(16);
 var is = __webpack_require__(0);
 
 module.exports = {
@@ -10217,7 +8948,7 @@ module.exports = elesfn;
 
 var util = __webpack_require__(1);
 var exprs = __webpack_require__(54);
-var newQuery = __webpack_require__(13);
+var newQuery = __webpack_require__(12);
 
 // of all the expressions, find the first match in the remaining text
 var consumeExpr = function consumeExpr(remaining) {
@@ -10356,12 +9087,12 @@ module.exports = { parse: parse };
 
 var _slicedToArray = function () { function sliceIterator(arr, i) { var _arr = []; var _n = true; var _d = false; var _e = undefined; try { for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) { _arr.push(_s.value); if (i && _arr.length === i) break; } } catch (err) { _d = true; _e = err; } finally { try { if (!_n && _i["return"]) _i["return"](); } finally { if (_d) throw _e; } } return _arr; } return function (arr, i) { if (Array.isArray(arr)) { return arr; } else if (Symbol.iterator in Object(arr)) { return sliceIterator(arr, i); } else { throw new TypeError("Invalid attempt to destructure non-iterable instance"); } }; }();
 
-var _require = __webpack_require__(19),
+var _require = __webpack_require__(18),
     stateSelectorRegex = _require.stateSelectorRegex;
 
 var tokens = __webpack_require__(55);
 var util = __webpack_require__(1);
-var newQuery = __webpack_require__(13);
+var newQuery = __webpack_require__(12);
 
 // when a token like a variable has escaped meta characters, we need to clean the backslashes out
 // so that values get compared properly in Selector.filter()
@@ -10659,7 +9390,7 @@ module.exports = tokens;
 "use strict";
 
 
-var _require = __webpack_require__(19),
+var _require = __webpack_require__(18),
     stateSelectorMatches = _require.stateSelectorMatches;
 
 var is = __webpack_require__(0);
@@ -11726,7 +10457,7 @@ module.exports = elesfn;
 var is = __webpack_require__(0);
 var util = __webpack_require__(1);
 var math = __webpack_require__(2);
-var baseNodeShapes = __webpack_require__(12).nodeShapes;
+var baseNodeShapes = __webpack_require__(13).nodeShapes;
 var sbgn = __webpack_require__(7);
 var fn = void 0,
     elesfn = void 0;
@@ -12758,7 +11489,7 @@ module.exports = {
 "use strict";
 
 
-var Emitter = __webpack_require__(15);
+var Emitter = __webpack_require__(14);
 var define = __webpack_require__(4);
 var is = __webpack_require__(0);
 var util = __webpack_require__(1);
@@ -13326,7 +12057,7 @@ module.exports = elesfn;
 
 
 var is = __webpack_require__(0);
-var zIndexSort = __webpack_require__(21);
+var zIndexSort = __webpack_require__(20);
 var util = __webpack_require__(1);
 
 var elesfn = {
@@ -14761,7 +13492,7 @@ module.exports = elesfn;
 var is = __webpack_require__(0);
 var util = __webpack_require__(1);
 var Collection = __webpack_require__(8);
-var Element = __webpack_require__(18);
+var Element = __webpack_require__(17);
 
 var corefn = {
   add: function add(opts) {
@@ -15721,7 +14452,7 @@ module.exports = startAnimation;
 "use strict";
 
 
-var Emitter = __webpack_require__(15);
+var Emitter = __webpack_require__(14);
 var define = __webpack_require__(4);
 var is = __webpack_require__(0);
 var util = __webpack_require__(1);
@@ -16208,7 +14939,7 @@ module.exports = corefn;
 
 
 var is = __webpack_require__(0);
-var Style = __webpack_require__(22);
+var Style = __webpack_require__(21);
 
 var corefn = {
 
@@ -18586,10 +17317,10 @@ module.exports = corefn;
 var util = __webpack_require__(1);
 var define = __webpack_require__(4);
 var Collection = __webpack_require__(8);
-var Core = __webpack_require__(16);
+var Core = __webpack_require__(15);
 var incExts = __webpack_require__(98);
 var is = __webpack_require__(0);
-var Emitter = __webpack_require__(15);
+var Emitter = __webpack_require__(14);
 
 // registered extensions to cytoscape, indexed by name
 var extensions = {};
@@ -21758,7 +20489,7 @@ BRp.destroy = function () {
   }
 };
 
-[__webpack_require__(111), __webpack_require__(112), __webpack_require__(122), __webpack_require__(123), __webpack_require__(12), __webpack_require__(124)].forEach(function (props) {
+[__webpack_require__(111), __webpack_require__(112), __webpack_require__(122), __webpack_require__(123), __webpack_require__(13), __webpack_require__(124)].forEach(function (props) {
   util.extend(BRp, props);
 });
 
@@ -24350,7 +23081,7 @@ module.exports = BRp;
 "use strict";
 
 
-var zIndexSort = __webpack_require__(21);
+var zIndexSort = __webpack_require__(20);
 
 var BRp = {};
 
@@ -24472,7 +23203,7 @@ module.exports = BRp;
 var is = __webpack_require__(0);
 var util = __webpack_require__(1);
 var math = __webpack_require__(2);
-var Event = __webpack_require__(20);
+var Event = __webpack_require__(19);
 
 var BRp = {};
 
@@ -30482,7 +29213,7 @@ module.exports = CRp;
 
 var is = __webpack_require__(0);
 var util = __webpack_require__(1);
-var Style = __webpack_require__(22);
+var Style = __webpack_require__(21);
 
 // a dummy stylesheet object that doesn't need a reference to the core
 // (useful for init)
@@ -30585,7 +29316,7 @@ module.exports = Stylesheet;
 "use strict";
 
 
-module.exports = "snapshot-39bfb20fcc-1717328881875";
+module.exports = "snapshot-91d67c1529-1717417617738";
 
 /***/ })
 /******/ ]);
