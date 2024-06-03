@@ -1,10 +1,6 @@
 // sbgn shapes not supported by cytoscape.js this object will be exposed in cytoscape.js
 // and will be filled in sbgnviz.js
 
-// TODO: consider filling this object here and remove related things from sbgnviz
-// I agree it makes more sense like this. This way you can write tests here. - Umut E
-
-// This is a comment from sbgnviz.js. I am leaving it as is. - Umut E
 /*
 * Taken from cytoscape.js and modified so that it can be utilized from sbgnviz
 * in a flexable way. It is needed because the sbgnviz shapes would need to stroke
@@ -91,7 +87,7 @@ sbgn.drawBorder = function ({ context, node, borderWidth, borderColor, borderSty
   }
 };
 
-sbgn.drawRoundRectanglePath = function (context, x, y, width, height, radius) {
+var drawRoundRectanglePath = sbgn.drawRoundRectanglePath = function (context, x, y, width, height, radius) {
 
   var halfWidth = width / 2;
   var halfHeight = height / 2;
@@ -116,7 +112,7 @@ sbgn.drawRoundRectanglePath = function (context, x, y, width, height, radius) {
   context.closePath();
 };
 
-sbgn.drawPolygonPath = function (context, x, y, width, height, points) {
+var drawPolygonPath = function (context, x, y, width, height, points) {
 
   var halfW = width / 2;
   var halfH = height / 2;
@@ -132,7 +128,7 @@ sbgn.drawPolygonPath = function (context, x, y, width, height, points) {
   context.closePath();
 };
 
-sbgn.sbgnShapes = {
+var sbgnShapes = sbgn.sbgnShapes = {
   'source and sink': true,
   'nucleic acid feature': true,
   'complex': true,
@@ -142,7 +138,7 @@ sbgn.sbgnShapes = {
   'compartment': true
 };
 
-sbgn.totallyOverridenNodeShapes = {
+var totallyOverridenNodeShapes = sbgn.totallyOverridenNodeShapes = {
   'macromolecule': true,
   'nucleic acid feature': true,
   'simple chemical': true,
@@ -151,7 +147,7 @@ sbgn.totallyOverridenNodeShapes = {
   'compartment': true
 };
 
-sbgn.canHaveInfoBoxShapes = {
+var canHaveInfoBoxShapes = sbgn.canHaveInfoBoxShapes = {
   'simple chemical': true,
   'macromolecule': true,
   'nucleic acid feature': true,
@@ -160,7 +156,7 @@ sbgn.canHaveInfoBoxShapes = {
   'compartment': true
 };
 
-sbgn.canBeMultimerShapes = {
+var canBeMultimerShapes = sbgn.canBeMultimerShapes = {
   'macromolecule': true,
   'complex': true,
   'nucleic acid feature': true,
